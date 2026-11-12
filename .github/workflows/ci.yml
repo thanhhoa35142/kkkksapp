@@ -1,0 +1,33 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+          xcodebuild -version
+
+      - name: Build (compile check, no signing)
+        run: |
+          xcodebuild \
+            -project MyApp.xcodeproj \
+            -scheme MyApp \
+            -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+
+      # TODO: add `xcodebuild test` once the suite has real tests — needs a
+      # concrete simulator destination, e.g.
+      #   -destination 'platform=iOS Simulator,name=iPhone 16'
