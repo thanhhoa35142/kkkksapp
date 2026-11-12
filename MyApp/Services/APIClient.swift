@@ -17,7 +17,7 @@ actor APIClient {
         return [
             "X-Client": "pickhour-ios",
             "X-Client-Version": "\(version)+\(build)",
-            "X-Client-OS": "ios \(ProcessInfo.processInfo.operatingSystemVersionString)",.
+            "X-Client-OS": "ios \(ProcessInfo.processInfo.operatingSystemVersionString)",
             "Accept-Language": Locale.preferredLanguages.prefix(3).joined(separator: ","),
         ]
     }()
