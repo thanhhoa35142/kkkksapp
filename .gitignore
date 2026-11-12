@@ -1,0 +1,31 @@
+# Xcode
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+DerivedData/
+build/
+Build/
+
+# CocoaPods (not used — synchronized groups project)
+Pods/
+
+# macOS
+.DS_Store
+*.swp
+*~
+
+# Fastlane (if added later)
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# Signing — never commit
+*.mobileprovision
+*.p12
+*.cer
+
+# Local env / secrets
+.env
+.env.*
+!.env.example
