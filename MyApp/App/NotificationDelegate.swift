@@ -1,4 +1,4 @@
-import UIKit
+import Foundation
 import UserNotifications
 
 /// UNUserNotificationCenter delegate — decides how notifications appear while

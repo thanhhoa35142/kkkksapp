@@ -18,12 +18,24 @@ jobs:
           sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
           xcodebuild -version
 
-      - name: Build (compile check, no signing)
+      - name: Build iOS/iPadOS (compile check, no signing)
         run: |
           xcodebuild \
             -project MyApp.xcodeproj \
             -scheme MyApp \
             -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+
+      # Native macOS destination of the same target (not Catalyst).
+      - name: Build macOS (compile check, no signing)
+        run: |
+          xcodebuild \
+            -project MyApp.xcodeproj \
+            -scheme MyApp \
+            -destination 'generic/platform=macOS' \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \

@@ -51,6 +51,6 @@ Long-press một giờ trong forecast → "Remind me at this hour" (`alarm`) →
 
 ## Design tokens
 
-- Màu: system semantic colors (`.green/.mint/.orange/.red` cho score tiers) — đổi sang asset catalog colors khi chốt palette.
+- Màu: xem `UI_SPEC.md` §2 (Meadow `AccentColor`; tier Great/Good = Meadow, Fair = orange, Poor = secondary).
 - Font: system font + Dynamic Type; mono chỉ cho số liệu/ID.
 - Tránh: custom fonts, emoji icons, glassmorphism quá mức, animation `transition-all`-style (dùng `.animation(_:value:)` có scope).
