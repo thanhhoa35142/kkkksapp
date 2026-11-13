@@ -15,13 +15,13 @@ enum ReasonLocalizer {
         switch code {
         // Weather
         case "weather.clear":
-            return String(localized: "Clear skies, \(temp(params))°")
+            return String(localized: "Clear skies, \(temp(params))")
         case "weather.rain_risk":
             return String(localized: "Rain likely, \(prob(params))% chance")
         case "weather.hot":
-            return String(localized: "Hot, \(temp(params))°")
+            return String(localized: "Hot, \(temp(params))")
         case "weather.cold":
-            return String(localized: "Cold, \(temp(params))°")
+            return String(localized: "Cold, \(temp(params))")
         case "weather.cloudy":
             return String(localized: "Overcast")
 
@@ -46,9 +46,39 @@ enum ReasonLocalizer {
             return String(localized: "Extreme heat — score capped")
         case "cap.cold":
             return String(localized: "Freezing — score capped")
+        case "cap.dark":
+            return String(localized: "After dark — score capped")
+        case "cap.twilight":
+            return String(localized: "Dusk or dawn — score capped")
 
         default:
+            // Unknown codes are dropped by callers via `isKnown` — never shown raw.
             return code
+        }
+    }
+
+    /// Codes this build can phrase; newer server codes are skipped in UI.
+    static func isKnown(_ code: String) -> Bool {
+        symbol(for: code) != nil
+    }
+
+    /// SF Symbol for a reason row (Spot Detail). nil = unknown code.
+    static func symbol(for code: String) -> String? {
+        switch code {
+        case "weather.clear": "sun.max.fill"
+        case "weather.rain_risk": "cloud.rain.fill"
+        case "weather.hot": "thermometer.sun.fill"
+        case "weather.cold": "thermometer.snowflake"
+        case "weather.cloudy": "cloud.fill"
+        case "crowd.low", "crowd.moderate", "crowd.high": "person.2.fill"
+        case "amenity.well_equipped": "toilet.fill"
+        case "fresh.recent": "checkmark.seal.fill"
+        case "cap.rain": "cloud.heavyrain.fill"
+        case "cap.heat": "thermometer.sun.fill"
+        case "cap.cold": "snowflake"
+        case "cap.dark": "moon.fill"
+        case "cap.twilight": "sun.horizon.fill"
+        default: nil
         }
     }
 
@@ -59,10 +89,10 @@ enum ReasonLocalizer {
         return nil
     }
 
-    /// `temp` arrives rounded to 0.1 — display as whole degrees.
+    /// `temp` arrives in °C rounded to 0.1 — formatted per unit preference.
     private static func temp(_ params: [String: JSONValue]?) -> String {
         guard let t = param(params, "temp") else { return "--" }
-        return String(Int(t.rounded()))
+        return Format.temperature(celsius: t)
     }
 
     /// `prob` is a 0–100 percentage already.

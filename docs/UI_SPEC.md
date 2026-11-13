@@ -316,7 +316,7 @@ Theo mẫu màn Welcome trong app của chính Apple (Notes, Freeform, Journal),
 
 - Là `List(.insetGrouped)`; phần header (bản đồ, tên, điểm, nút) là section đầu với `listRowInsets` tự chỉnh.
 - **Biểu đồ giờ (D1):** `Chart { BarMark(x: .value("Hour", h), y: .value("Score", s)) }`, chiều cao 120pt. Màu cột theo tier, cột đang chọn là Meadow đậm. Chạm hoặc kéo dùng `chartXSelection` để đổi giờ đang xem; long-press một giờ thì mở "Remind me at this hour" (`UI.md`).
-- **Chọn ngày:** Free được 24 giờ tới (§15). Các ngày ngoài 24h hiện `lock.fill`, bấm vào mở S11, không làm mờ biểu đồ.
+- **Chọn ngày:** Free xem theo giờ hôm nay và ngày mai (§15). Từ ngày thứ 3 hiện `lock.fill`, bấm vào mở S11 (`reason: forecast`), không làm mờ biểu đồ. Dải điểm tổng mỗi ngày cho Free: ROADMAP 0.15.
 - **Nút hành động:** Directions dùng `MKMapItem.openInMaps`. Alert mở S10 (lần đầu sẽ xin quyền thông báo). Report mở S9. Save nằm trên nav bar (`heart` / `heart.fill`).
 - **Độ đông:** khi chỉ có ước lượng từ mô hình, luôn ghi "Estimate" (§16) và mức tin cậy không vượt Medium (server đã giới hạn).
 - **Không có tiện ích:** ẩn hẳn section Amenities, không hiện "No amenities".
@@ -325,6 +325,12 @@ Theo mẫu màn Welcome trong app của chính Apple (Notes, Freeform, Journal),
 
 ```
 │ Saved                         Edit  │
+├─ This Week ─────────────────────────┤  Plus
+│ Saturday                       (87) │  PlanWindowRow, chạm → S5
+│ 2 PM–6 PM · Vondelpark              │
+│ Sunday                         (81) │
+│ 11 AM–2 PM · Westerpark             │
+│ Weekend plan on Thursday       [on] │  Toggle, push tối thứ 5
 ├─ Places ────────────────────────────┤
 │ (82) Vondelpark      Park · 1.2 km  │  SpotRow, điểm theo When hiện tại
 │ (64) Bondi Beach    Beach · 16k km  │
@@ -335,6 +341,8 @@ Theo mẫu màn Welcome trong app của chính Apple (Notes, Freeform, Journal),
 ```
 
 - Favorites lưu trên máy bằng SwiftData; Free tối đa 10 (§15). Alerts lấy từ `GET /v1/alerts`, Free 1 khu vực.
+- **This Week (Plus):** mỗi ngày 1 khung giờ đẹp nhất trên 10 điểm đầu tiên của Saved (`GET /v1/spots/{id}/forecast`, gọi song song). Khung giờ: các giờ liền nhau đều ≥ 60, từ 08:00 đến 20:00 giờ địa phương của điểm, bắt đầu từ cặp 2 giờ cao nhất rồi nới ra các giờ kề nhau còn trong vòng 5 điểm, tối đa 4 giờ, cùng giới hạn với job `digest.weekly` (`WeekPlanner`, có unit test). Không ngày nào đạt thì hiện "No 2-hour window scores 60 or more…". Free thấy 1 hàng `lock.fill` "See the best times this week" mở S11 (`reason: planner`). iPad/Mac hiện cùng mục này trong sidebar Explore.
+- **Weekend plan on Thursday:** Toggle trong This Week, bật thì xin quyền thông báo rồi `PUT /v1/devices/{id}/digest` với danh sách Saved (tối đa 20 điểm). Danh sách Saved đổi thì gửi lại. Push `kind: digest.weekend` mở thẳng điểm đó.
 - Trống: `ContentUnavailableView("No saved places", systemImage: "heart", description: "Tap Save on a spot to keep it here.")`.
 
 ### S4 · Settings (tab 4)
@@ -351,7 +359,7 @@ Theo mẫu màn Welcome trong app của chính Apple (Notes, Freeform, Journal),
 ### S6 · When picker (sheet, `.medium`)
 
 - Hai chỗ mở: `Menu` trên toolbar với lựa chọn nhanh "Now · In 2 hours · This Evening · Tomorrow Morning · Saturday · Sunday", và mục "Choose a Time…" mở sheet.
-- Sheet: `DatePicker` kiểu `.graphical` cho ngày (giới hạn 7 ngày) cộng `Picker` giờ (bước 1 giờ, vì điểm tính theo giờ). Ngày ngoài 24h với Free hiện khóa.
+- Sheet: `DatePicker` kiểu `.graphical` cho ngày (giới hạn 7 ngày) cộng `Picker` giờ (bước 1 giờ, vì điểm tính theo giờ). Từ ngày thứ 3, Free thấy khóa.
 - Nhãn trên toolbar theo múi giờ của điểm hoặc thành phố đang xem ("Sat 10 AM").
 
 ### S7 · Score breakdown "Why 82?" (sheet, `.medium` / `.large`)
@@ -375,6 +383,10 @@ Theo mẫu màn Welcome trong app của chính Apple (Notes, Freeform, Journal),
 
 ### S9 · Report (sheet, `.medium`) — P1
 
+**Độ đông (đã viết):** mục "How busy is it right now?" trong Spot Detail, ngay dưới phần điểm, chỉ hiện khi app đã có quyền vị trí và người dùng đang ở gần (park/beach ≤ 600 m, site/table ≤ 150 m so với tâm điểm; kiểm trên máy, không gửi tọa độ). 3 nút Quiet / Some people / Busy → `POST /v1/spots/{id}/crowd-reports` (`level` 1–3). Mỗi điểm 1 lần/giờ trên máy; sau khi gửi hiện "Thanks — you said busy.". Không tự xin quyền vị trí ở đây.
+
+**Báo sai thông tin (bản đầu):**
+
 `Form` có hai section:
 1. **How busy is it right now?** dùng `Picker(.segmented)` Quiet / Moderate / Busy, gọi `POST /crowd-reports`. Chỉ bật khi người dùng ở gần (kiểm khoảng cách trên máy); nếu ở xa thì section này ẩn kèm footer giải thích.
 2. **Is this spot correct?** gồm "Still here" (một chạm, gọi `confirm`), "It's gone", "It's closed", "Something's wrong…" (Picker các `issueCode`).
@@ -383,11 +395,30 @@ Gửi xong: đóng sheet và hiện xác nhận ngắn qua `.sensoryFeedback(.su
 
 ### S10 · Alert editor (sheet, `.large`) — P1
 
-`Form`: Spot (tên điểm, hoặc "Area around Amsterdam" với radius `Picker` 1/3/5 km), Notify when score is at least (`Stepper` bước 5, mặc định 75), Days (7 toggle trong `DisclosureGroup`, hoặc preset Weekends/Every day), Between (hai `DatePicker(.hourAndMinute)`), Enabled. Toolbar có Cancel / Save. Free đã có 1 khu vực mà tạo thêm thì mở S11 thay vì lưu.
+`Form`: Spot (tên điểm; **bản đầu chỉ có alert theo điểm** — alert theo khu vực cần tính H3 cell trên máy, để sau), Notify when score is at least (`Stepper` bước 5, mặc định 75), Days (preset Every day / Weekdays / Weekends / Custom; Custom hiện 7 toggle; `daysMask` bit 0 = Chủ nhật, Sat+Sun = 65), Between (hai `DatePicker(.hourAndMinute)`), Enabled. Toolbar có Cancel / Save. Free đã có 1 khu vực mà tạo thêm thì mở S11 thay vì lưu.
 
 ### S11 · Paywall (sheet)
 
-`SubscriptionStoreView(groupID:)` của StoreKit 2 với `.subscriptionStoreControlStyle(.prominentPicker)`. Phần marketing là 3 dòng `Label` (7-day forecast, unlimited picks, more alerts), ảnh App Icon ở trên cùng, không có ảnh minh họa, không `sparkles` hay icon "premium" (`crown`, `star`). Mở **chỉ** từ các điểm chạm §15 (ngày 3+, alert thứ hai, hàng "See more"), không bao giờ tự bật lên.
+`SubscriptionStoreView(productIDs:)` của StoreKit 2. Phần marketing ở trên, rộng tối đa 520pt:
+
+1. Tiêu đề "Pickhour Plus" (`.largeTitle.bold`) và **1 dòng theo điểm chạm** (`PaywallReason`): `forecast` "Plan the whole week, hour by hour." · `picks` "See every good spot nearby, not just the top three." · `saved` "Save as many places as you like." · `alerts` "Get alerts for all your favorite spots." · `planner` "See the best picnic times across your places this week." · `general` (từ Settings) "Pick the best hour for every picnic."
+2. **Bảng so sánh** (`Grid`, 3 cột: tính năng · Free · Plus; cột Plus màu Meadow, có `Divider` giữa các hàng). Mỗi hàng là 1 phần tử VoiceOver. Số lấy từ hằng số trong code, không gõ tay:
+
+| Tính năng | Free | Plus |
+|---|---|---|
+| Best times this week | — | Included |
+| Weekend plan on Thursday | — | Included |
+| Hourly scores | Today and tomorrow | 7 days |
+| Best nearby | 3 | 30 |
+| Score alerts | 1 | Unlimited |
+| Saved places | 10 | Unlimited |
+
+3. Footnote "Cancel anytime in Settings. Works on iPhone, iPad and Mac."
+4. Nút hệ thống: Restore Purchases, Terms/Privacy (`.policies`), Cancel.
+
+**Chỉ liệt kê tính năng đã có trong bản build** (App Review 2.3). Khi bóng râm, chỉnh trọng số, gói ngoại tuyến, iCloud ra mắt thì thêm hàng tương ứng. Không ảnh minh họa, không `sparkles`, không icon "premium" (`crown`, `star`). Mở **chỉ** từ điểm chạm §15 (ngày 3+, alert thứ hai, yêu thích thứ 11, hàng "See more", Settings), không bao giờ tự bật lên. Sự kiện `paywall_shown` và `plus_purchased` kèm `reason` để biết điểm chạm nào chuyển đổi tốt.
+
+**Khảo sát khi đóng paywall** (`PaywallSurvey`): `.confirmationDialog` "What would make Plus worth it?", message "One tap helps us decide what to build next.". 4 lựa chọn tính năng đảo thứ tự mỗi lần hiện (Shade and sun by hour, Offline city maps, Scores tuned for kids or dogs, Sync across my devices), sau đó là "It costs too much", "I don't picnic often enough", "Not Now". Chỉ hiện khi đóng sheet paywall ở root mà không mua, từ lần đóng thứ 2, tối đa 1 lần/30 ngày, không hỏi người dùng Plus. Hiện sau khi sheet đóng xong khoảng 0,45 giây. Gửi `paywall_feedback {choice, reason}`; "Not Now" gửi `choice: dismissed`. Delete My Data xóa luôn bộ đếm này.
 
 ---
 
@@ -411,7 +442,15 @@ Gửi xong: đóng sheet và hiện xác nhận ngắn qua `.sensoryFeedback(.su
 - **Mã lý do:** `ReasonLocalizer` ánh xạ `weather.clear`, `weather.rain_risk`, `weather.hot`, `weather.cold`, `crowd.low|moderate|high`, `amenity.well_equipped`, `fresh.recent` sang câu ngắn kèm SF Symbol. Mã chưa biết thì bỏ qua, không hiện mã thô.
 - **Thuật ngữ:** "Picnic area" / "Picknickplatz" / "Aire de pique-nique"… lấy từ bảng thuật ngữ trong yêu cầu §11.
 
-## 6. Widget (giai đoạn sau, D7)
+## 6. Widget (D7) — đã viết, target `PickhourWidget`
+
+- **Best Now**, `StaticConfiguration`: small (điểm tốt nhất: vòng điểm + tên), medium (3 điểm, mỗi hàng là `Link`), trên iOS thêm Lock Screen (`accessoryRectangular`, `accessoryInline`, `accessoryCircular` dạng `Gauge`). Chạm → `pickhour://spot/<id>` mở Spot Detail.
+- App ghi vào App Group (`Shared/WidgetBridge.swift`) điểm tọa độ đã làm tròn 2 chữ số (~1 km), tên nơi, API base URL, đơn vị. Widget tự gọi `GET /v1/recommendations?limit=3`; làm mới sau mỗi giờ +5 phút, lỗi thì thử lại sau 15 phút.
+- Nếu mọi kết quả bị cap `dark` thì widget gọi lại cho 10:00 sáng gần nhất và ghi "Tomorrow 10 AM" ở góc trên.
+- Delete My Data xóa dữ liệu App Group và tải lại widget.
+- **Cần làm khi đổi bundle ID (ROADMAP 0.3):** đổi `group.com.example.MyApp` ở `WidgetBridge.appGroup` và 4 file entitlements, bật App Groups cho cả 2 App ID.
+
+### Bản cũ (tham khảo)
 
 `systemSmall`: một điểm tốt nhất ("82 · Vondelpark · 3 PM"). `systemMedium`: top 3 cộng giờ. Dùng `containerBackground(.fill.tertiary)`, tint Meadow, không có ảnh. `accessoryCircular` cho Lock Screen: `Gauge` hiện điểm.
 

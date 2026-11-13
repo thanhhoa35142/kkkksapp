@@ -17,6 +17,18 @@
     <array>
         <string>remote-notification</string>
     </array>
+    <!-- pickhour://spot/<uuid> — widget taps and notification routing. -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>pickhour</string>
+            </array>
+        </dict>
+    </array>
     <key>APIBaseURL</key>
     <string>http://localhost:8080</string>
 </dict>

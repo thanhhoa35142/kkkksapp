@@ -41,7 +41,7 @@ actor EventQueue {
                 pending.removeFirst(batch.count)
                 persist()
             } catch {
-                Log.events.error("event flush failed, \(pending.count) still queued: \(error.localizedDescription)")
+                Log.events.error("event flush failed, \(self.pending.count) still queued: \(error.localizedDescription)")
                 return
             }
         }

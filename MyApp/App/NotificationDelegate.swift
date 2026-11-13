@@ -16,13 +16,15 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
 
     /// Notification tapped — route to the spot if the payload carries one.
     /// Payload contract (backend notifier.Payload): top-level "kind",
-    /// "spotId", "ruleId", "score", "windowStart" next to "aps".
+    /// "spotId", "score", "windowStart" next to "aps". Kinds: "alert.window"
+    /// (score alert, + "ruleId") and "digest.weekend" (Thursday plan, + "windowEnd").
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
         let userInfo = response.notification.request.content.userInfo
-        guard (userInfo["kind"] as? String) == "alert.window" else { return }
+        guard let kind = userInfo["kind"] as? String,
+              ["alert.window", "digest.weekend"].contains(kind) else { return }
         let spotID = (userInfo["spotId"] as? String).flatMap(UUID.init(uuidString:))
         await MainActor.run {
             DeepLinkRouter.shared.handle(spotID: spotID)
