@@ -6,6 +6,21 @@ import Security
 enum KeychainStore {
     private static let service = "app.pickhour.shared"
 
+    /// Base query for every call. On macOS the legacy file keychain behaves
+    /// differently (per-app ACL prompts); the data protection keychain gives
+    /// the same semantics as iOS.
+    private static func base(_ key: Key) -> [String: Any] {
+        var q: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: key.rawValue,
+        ]
+        #if os(macOS)
+        q[kSecUseDataProtectionKeychain as String] = true
+        #endif
+        return q
+    }
+
     enum Key: String {
         case deviceID = "device.id"
         case apnsToken = "apns.token"
@@ -13,13 +28,9 @@ enum KeychainStore {
     }
 
     static func string(for key: Key) -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key.rawValue,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
+        var query = base(key)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
         var item: CFTypeRef?
         guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
               let data = item as? Data else { return nil }
@@ -28,25 +39,16 @@ enum KeychainStore {
 
     static func set(_ value: String, for key: Key) {
         delete(key)
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key.rawValue,
-            kSecValueData as String: Data(value.utf8),
-            // Readable after first unlock so the app can register the device
-            // on cold launch without user interaction.
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
-        ]
+        var query = base(key)
+        query[kSecValueData as String] = Data(value.utf8)
+        // Readable after first unlock so the app can register the device
+        // on cold launch without user interaction.
+        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
         SecItemAdd(query as CFDictionary, nil)
     }
 
     static func delete(_ key: Key) {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key.rawValue,
-        ]
-        SecItemDelete(query as CFDictionary)
+        SecItemDelete(base(key) as CFDictionary)
     }
 }
 

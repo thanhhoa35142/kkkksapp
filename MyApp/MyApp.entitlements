@@ -4,5 +4,10 @@
 <dict>
     <key>aps-environment</key>
     <string>development</string>
+    <!-- Shared with the PickhourWidget extension (Shared/WidgetBridge.swift). -->
+    <key>com.apple.security.application-groups</key>
+    <array>
+        <string>group.com.example.MyApp</string>
+    </array>
 </dict>
 </plist>

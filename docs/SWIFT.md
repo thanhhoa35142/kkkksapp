@@ -1,4 +1,12 @@
-# Pickhour — Swift conventions (iOS 17+)
+# Pickhour — Swift conventions (iOS 17+, macOS 15+)
+
+## Nền tảng
+
+- Một target `MyApp`, destinations: iPhone, iPad, **Mac native** (`SUPPORTED_PLATFORMS = iphoneos iphonesimulator macosx`, `SDKROOT = auto`). **Không** dùng Mac Catalyst, **không** dùng "Designed for iPad" (cả hai đã tắt trong build settings).
+- Code riêng theo nền tảng chỉ bằng `#if os(iOS)` / `#elseif os(macOS)`, và chỉ trong: `MyAppApp` (delegate adaptor, kích thước cửa sổ), `AppDelegate`, `PushManager` (đăng ký APNs), `KeychainStore` (data protection keychain trên Mac), wrapper bản đồ (`UIViewRepresentable`/`NSViewRepresentable`). Mọi view SwiftUI khác phải build được trên cả hai.
+- API chỉ có trên iOS, không dùng trực tiếp trong view chung: `EditButton`, `.navigationBarTitleDisplayMode`, `.topBarLeading/.topBarTrailing` (dùng `.primaryAction`, `.cancellationAction`, `.confirmationAction`, `.automatic`), `fullScreenCover`, `.listStyle(.insetGrouped)` (dùng `.automatic`), `.keyboardType`, `UIApplication`.
+- Entitlements: iOS `MyApp/MyApp.entitlements`, Mac `MyApp/MyApp-macOS.entitlements` (sandbox, network client, location, APNs) qua `CODE_SIGN_ENTITLEMENTS[sdk=macosx*]`.
+- CI build cả `generic/platform=iOS Simulator` và `generic/platform=macOS`.
 
 Best practices từ WWDC24/25 + Swift 6.2, áp dụng cho codebase này. Nguồn: Apple "Explore concurrency in SwiftUI" (WWDC25/266), "Migrate your app to Swift 6" (WWDC24/10169), Swift.org migration guide.
 

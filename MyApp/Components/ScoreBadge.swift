@@ -1,62 +1,61 @@
 import SwiftUI
 
-/// Score → display tier. Thresholds are a first pass — tune with design.
-enum ScoreTier {
-    case great, good, fair, poor
-
-    init(score: Int) {
-        switch score {
-        case 80...: self = .great
-        case 60..<80: self = .good
-        case 40..<60: self = .fair
-        default: self = .poor
-        }
-    }
-}
-
-
+/// Score ring with the number inside — the one visual accent of a row
+/// (UI_SPEC §2). Color by tier, fill by value, number always shown, so the
+/// score never depends on color alone.
 struct ScoreBadge: View {
     let score: Int?
+    var capReason: String? = nil
+    var diameter: CGFloat = 44
 
     private var tier: ScoreTier? { score.map(ScoreTier.init) }
-
-    private var tint: Color {
-        switch tier {
-        case .great: return .green
-        case .good: return .mint
-        case .fair: return .orange
-        case .poor: return .red
-        case nil: return .secondary
-        }
-    }
+    private var lineWidth: CGFloat { max(3, diameter / 11) }
 
     var body: some View {
-        if let score {
-            Text("\(score)")
-                .font(.caption.bold())
-                .monospacedDigit()
-                .foregroundStyle(.white)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(tint, in: Capsule())
-                .accessibilityLabel("Score \(score) out of 100")
-        } else {
-            Image(systemName: "minus")
-                .font(.caption.bold())
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(.quaternary, in: Capsule())
-                .accessibilityLabel("No score yet")
+        ZStack {
+            Circle()
+                .stroke(Color.secondary.opacity(0.2), lineWidth: lineWidth)
+            if let score, let tier {
+                Circle()
+                    .trim(from: 0, to: CGFloat(score) / 100)
+                    .stroke(tier.color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .animation(.easeInOut(duration: 0.25), value: score)
+                Text(score, format: .number)
+                    .font(.system(size: diameter * 0.36, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .contentTransition(.numericText(value: Double(score)))
+                    .animation(.snappy(duration: 0.25), value: score)
+            } else {
+                Text(verbatim: "–")
+                    .font(.system(size: diameter * 0.36, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
         }
+        .frame(width: diameter, height: diameter)
+        .overlay(alignment: .bottomTrailing) {
+            if let symbol = CapStyle.symbol(capReason) {
+                Image(systemName: symbol)
+                    .font(.system(size: diameter * 0.26))
+                    .foregroundStyle(.orange)
+                    .offset(x: 4, y: 4)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText)
+    }
+
+    private var accessibilityText: String {
+        guard let score, let tier else { return String(localized: "No score yet") }
+        return String(localized: "Score \(score), \(tier.label)")
     }
 }
 
 #Preview {
-    HStack(spacing: 8) {
+    HStack(spacing: 12) {
         ScoreBadge(score: 92)
         ScoreBadge(score: 65)
-        ScoreBadge(score: 45)
+        ScoreBadge(score: 45, capReason: "rain")
         ScoreBadge(score: 12)
         ScoreBadge(score: nil)
     }

@@ -1,6 +1,10 @@
 import Foundation
-import UIKit
 import UserNotifications
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 /// Push notification lifecycle: permission prompt, APNs registration and
 /// syncing the device token to the backend.
@@ -36,7 +40,11 @@ final class PushManager {
         let status = await authorizationStatus()
         guard status == .authorized || status == .provisional || status == .ephemeral else { return }
         await MainActor.run {
+            #if os(iOS)
             UIApplication.shared.registerForRemoteNotifications()
+            #elseif os(macOS)
+            NSApplication.shared.registerForRemoteNotifications()
+            #endif
         }
     }
 

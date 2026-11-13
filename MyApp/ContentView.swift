@@ -1,16 +1,8 @@
 import SwiftUI
 
-/// Placeholder root view — map + spot list UI comes next.
+/// App root — layout selection lives in RootView.
 struct ContentView: View {
     var body: some View {
-        NavigationStack {
-            Text("Pickhour")
-                .font(.largeTitle)
-                .navigationTitle("Pickhour")
-        }
+        RootView()
     }
-}
-
-#Preview {
-    ContentView()
 }

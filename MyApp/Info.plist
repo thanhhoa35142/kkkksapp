@@ -10,9 +10,24 @@
     </dict>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>Pickhour uses your location to show nearby picnic spots and the best time to visit.</string>
+    <!-- macOS reads this key for the location prompt. -->
+    <key>NSLocationUsageDescription</key>
+    <string>Pickhour uses your location to show nearby picnic spots and the best time to visit.</string>
     <key>UIBackgroundModes</key>
     <array>
         <string>remote-notification</string>
+    </array>
+    <!-- pickhour://spot/<uuid> — widget taps and notification routing. -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>pickhour</string>
+            </array>
+        </dict>
     </array>
     <key>APIBaseURL</key>
     <string>http://localhost:8080</string>

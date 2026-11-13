@@ -31,6 +31,10 @@ struct SpotFeature: Decodable {
         let lastVerifiedAt: Date?
         let when: Date
         let score: ScoreSnapshot?
+        /// Hourly scores from `from` — present only when requested with `hours=`.
+        let scores: [HourScore]?
+        /// Simplified park outline — present only with `include=area`.
+        let area: JSONValue?
     }
 
     let type: String
@@ -67,11 +71,20 @@ struct SpotDetail: Decodable {
     let lastVerifiedAt: Date?
     let amenities: [Amenity]
     let sources: [Source]
+    /// "weatherkit" | "openmeteo" | nil — drives the weather attribution line.
+    let weatherSource: String?
 
     var coordinate: CLLocationCoordinate2D? {
         guard coordinates.count >= 2 else { return nil }
         return CLLocationCoordinate2D(latitude: coordinates[1], longitude: coordinates[0])
     }
+}
+
+/// One hour of a viewport time-lapse (`GET /v1/spots?...&hours=`).
+struct HourScore: Decodable {
+    let tsHour: Date
+    let score: Int
+    let capReason: String?
 }
 
 struct ForecastPoint: Decodable {
