@@ -163,8 +163,13 @@ struct SpotDetailView: View {
         }
     }
 
+    /// One row of equal-width buttons; stacked at accessibility sizes so the
+    /// labels never get cut to a third of the width.
     private var actionButtons: some View {
-        HStack(spacing: 12) {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: 10))
+            : AnyLayout(HStackLayout(spacing: 12))
+        return layout {
             if let coordinate {
                 Button {
                     Directions.open(name: displayName, coordinate: coordinate)
@@ -174,6 +179,7 @@ struct SpotDetailView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("spotAction.directions")
             }
             Button {
                 showAlertEditor = true
@@ -183,6 +189,7 @@ struct SpotDetailView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
+            .accessibilityIdentifier("spotAction.alert")
             Button {
                 showReport = true
             } label: {
@@ -190,6 +197,7 @@ struct SpotDetailView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
+            .accessibilityIdentifier("spotAction.report")
         }
         .controlSize(.large)
         .labelStyle(.titleAndIcon)

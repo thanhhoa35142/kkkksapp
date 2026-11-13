@@ -132,6 +132,7 @@ private struct PlanComparison: View {
                 .monospacedDigit()
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(Text("\(row.feature), Free: \(row.free ?? String(localized: "not included")), Plus: \(row.plus)"))
+                .accessibilityIdentifier("plan.row")
             }
         }
     }

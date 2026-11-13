@@ -14,5 +14,6 @@ enum AppConfig {
     }
 
     /// Shared API client for the whole app.
-    static let apiClient = APIClient(baseURL: apiBaseURL)
+    /// UI tests (`-UITestFixtures`) swap in an in-process fixture session.
+    static let apiClient = APIClient(baseURL: apiBaseURL, session: UITestFixtures.session ?? .shared)
 }

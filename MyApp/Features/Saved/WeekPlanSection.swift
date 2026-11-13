@@ -175,6 +175,7 @@ struct PlanWindowRow: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text("\(day), \(range), \(window.spotName), score \(window.score)"))
+        .accessibilityIdentifier("planRow")
     }
 
     private var range: String {

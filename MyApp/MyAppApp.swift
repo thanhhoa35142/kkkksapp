@@ -11,6 +11,16 @@ struct MyAppApp: App {
 
     @State private var appState = AppState()
 
+    /// One store for every scene; in-memory with seeded favorites in UI tests.
+    private static let modelContainer: ModelContainer = {
+        if let fixture = UITestFixtures.makeModelContainer() { return fixture }
+        do {
+            return try ModelContainer(for: FavoriteSpot.self)
+        } catch {
+            fatalError("SwiftData store failed to open: \(error)")
+        }
+    }()
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -21,7 +31,7 @@ struct MyAppApp: App {
                 .frame(minWidth: 960, minHeight: 640)
                 #endif
         }
-        .modelContainer(for: FavoriteSpot.self)
+        .modelContainer(Self.modelContainer)
         #if os(macOS)
         .defaultSize(width: 1200, height: 800)
         .windowResizability(.contentMinSize)
@@ -34,7 +44,7 @@ struct MyAppApp: App {
                 .environment(appState)
                 .frame(width: 520, height: 620)
         }
-        .modelContainer(for: FavoriteSpot.self)
+        .modelContainer(Self.modelContainer)
         #endif
     }
 }

@@ -23,6 +23,7 @@ struct SpotRow: View {
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("spotRow")
         .spotDraggable(spot)
     }
 

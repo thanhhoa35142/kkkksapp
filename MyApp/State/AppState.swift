@@ -77,7 +77,9 @@ final class AppState {
     private let api = AppConfig.apiClient
 
     init() {
-        if let data = defaults.data(forKey: "place"),
+        if UITestFixtures.isActive {
+            place = UITestFixtures.place
+        } else if let data = defaults.data(forKey: "place"),
            let decoded = try? JSONDecoder().decode(Place.self, from: data) {
             place = decoded
         }
