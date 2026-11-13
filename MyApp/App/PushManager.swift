@@ -38,7 +38,12 @@ final class PushManager {
     /// `AppDelegate.application(_:didRegisterForRemoteNotificationsWithDeviceToken:)`.
     func registerIfAuthorized() async {
         let status = await authorizationStatus()
-        guard status == .authorized || status == .provisional || status == .ephemeral else { return }
+        #if os(iOS)
+        let allowed: Set<UNAuthorizationStatus> = [.authorized, .provisional, .ephemeral]
+        #else
+        let allowed: Set<UNAuthorizationStatus> = [.authorized, .provisional]  // no .ephemeral on macOS
+        #endif
+        guard allowed.contains(status) else { return }
         await MainActor.run {
             #if os(iOS)
             UIApplication.shared.registerForRemoteNotifications()

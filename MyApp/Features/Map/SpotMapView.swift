@@ -205,7 +205,10 @@ extension SpotMapView {
             return renderer
         }
 
-        func mapView(_ mapView: MKMapView, didSelect annotation: MKAnnotation) {
+        // The MKAnnotationView variants exist on iOS and macOS; the
+        // `didSelect annotation:` ones are unavailable on macOS.
+        func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView) {
+            guard let annotation = view.annotation else { return }
             if let cluster = annotation as? MKClusterAnnotation {
                 mapView.showAnnotations(cluster.memberAnnotations, animated: !Self.reduceMotion)
                 mapView.deselectAnnotation(cluster, animated: false)
@@ -215,8 +218,8 @@ extension SpotMapView {
             parent.onSelect(spot.id)
         }
 
-        func mapView(_ mapView: MKMapView, didDeselect annotation: MKAnnotation) {
-            guard !applyingSelection, annotation is SpotAnnotation else { return }
+        func mapView(_ mapView: MKMapView, didDeselect view: MKAnnotationView) {
+            guard !applyingSelection, view.annotation is SpotAnnotation else { return }
             // Selecting another pin fires deselect first; only clear when nothing is selected.
             DispatchQueue.main.async { [weak self, weak mapView] in
                 guard let self, let mapView, mapView.selectedAnnotations.isEmpty else { return }
