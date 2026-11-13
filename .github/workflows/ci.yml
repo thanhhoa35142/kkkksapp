@@ -41,6 +41,18 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             build
 
-      # TODO: add `xcodebuild test` once the suite has real tests — needs a
-      # concrete simulator destination, e.g.
-      #   -destination 'platform=iOS Simulator,name=iPhone 16'
+      # Unit + UI tests on the first available iPhone simulator of the
+      # selected Xcode (device names change between Xcode releases).
+      - name: Test iOS (unit + UI tests on a simulator)
+        run: |
+          UDID=$(xcrun simctl list devices available -j \
+            | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(x["udid"] for r in sorted(d, reverse=True) if "iOS" in r for x in d[r] if x["name"].startswith("iPhone")))')
+          echo "Simulator: $UDID"
+          xcodebuild \
+            -project MyApp.xcodeproj \
+            -scheme MyApp \
+            -destination "id=$UDID" \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            test
