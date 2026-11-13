@@ -12,6 +12,8 @@ import SwiftData
 ///
 /// Names are deliberately long/awkward to catch wrapping and truncation.
 enum UITestFixtures {
+    typealias JSON = [String: Any]
+
     #if DEBUG
     static let isActive = ProcessInfo.processInfo.arguments.contains("-UITestFixtures")
     #else
@@ -105,29 +107,29 @@ enum UITestFixtures {
         case ("POST", "devices"):
             return ok(["id": UUID().uuidString])
         case ("GET", "devices") where parts.last == "entitlement":
-            return ok(isPlus
-                      ? ["plan": "plus", "productId": "com.pickhour.plus.yearly",
-                         "expiresAt": iso(.now.addingTimeInterval(300 * 86_400)), "autoRenew": true]
-                      : ["plan": "free"])
+            let plus: [String: Any] = ["plan": "plus", "productId": "com.pickhour.plus.yearly",
+                                       "expiresAt": iso(.now.addingTimeInterval(300 * 86_400)), "autoRenew": true]
+            let free: [String: Any] = ["plan": "free"]
+            return ok(isPlus ? plus : free)
         case (_, "devices") where parts.last == "digest":
             guard isPlus else { return problem(404, "not_found") }
             return ok(["spotIds": spots.prefix(3).map(\.id.uuidString), "enabled": true,
-                       "sendDow": 4, "sendHour": 18, "skippedIds": []])
+                       "sendDow": 4, "sendHour": 18, "skippedIds": [String]()] as JSON)
         case ("GET", "alerts"):
             return ok(["items": [alertRule()]])
         case ("POST", "events"):
-            return ok(["status": "accepted", "count": 1])
+            return ok(["status": "accepted", "count": 1] as JSON)
         case ("POST", _):
             return ok(["status": "accepted"])
         case ("GET", "packs"):
-            return ok(["items": [[
+            return ok(["items": [JSON]([[
                 "slug": "amsterdam", "name": "Amsterdam", "country": "NL", "tz": "Europe/Amsterdam",
                 "center": [4.89, 52.37], "bbox": [4.73, 52.28, 5.07, 52.43], "activeSpots": 412,
-            ]]])
+            ]])])
         case ("GET", "recommendations"):
             let when = q("when").flatMap(parseISO) ?? .now
             let limit = Int(q("limit") ?? "") ?? 3
-            return ok(["when": iso(when), "items": spots.prefix(limit).map { recommendation($0, at: when) }])
+            return ok(["when": iso(when), "items": spots.prefix(limit).map { recommendation($0, at: when) }] as JSON)
         case ("GET", "spots") where parts.count == 2:
             let when = q("when").flatMap(parseISO) ?? .now
             let from = q("from").flatMap(parseISO)
@@ -138,7 +140,7 @@ enum UITestFixtures {
                 chosen = spots.filter { wanted.contains($0.id) }
             }
             return raw(["type": "FeatureCollection",
-                        "features": chosen.map { feature($0, at: when, from: from, hours: hours) }])
+                        "features": chosen.map { feature($0, at: when, from: from, hours: hours) }] as JSON)
         case ("GET", "spots") where parts.count == 3:
             guard let id = UUID(uuidString: parts[2]), let spot = spot(id) else { return problem(404, "not_found") }
             return ok(detail(spot))
@@ -186,7 +188,7 @@ enum UITestFixtures {
                 return ["tsHour": iso(t), "score": s.score, "capReason": nullable(s.cap)]
             }
         }
-        return ["type": "Feature", "geometry": ["type": "Point", "coordinates": [spot.lon, spot.lat]],
+        return ["type": "Feature", "geometry": ["type": "Point", "coordinates": [spot.lon, spot.lat]] as JSON,
                 "properties": properties]
     }
 
@@ -194,11 +196,11 @@ enum UITestFixtures {
         ["id": spot.id.uuidString, "kind": spot.kind, "name": spot.name, "names": [String: String](),
          "coordinates": [spot.lon, spot.lat], "country": "NL", "city": "Amsterdam", "tz": "Europe/Amsterdam",
          "lastVerifiedAt": iso(.now.addingTimeInterval(-40 * 86_400)),
-         "amenities": [["type": "toilet", "distanceM": 120, "source": "osm"],
+         "amenities": [JSON]([["type": "toilet", "distanceM": 120, "source": "osm"],
                        ["type": "water", "distanceM": 340, "source": "osm"],
                        ["type": "playground", "distanceM": 410, "source": "osm"],
-                       ["type": "bicycle_parking", "distanceM": 60, "source": "osm"]],
-         "sources": [["source": "osm", "sourceId": "way/123", "version": 4, "importedAt": iso(.now)]],
+                       ["type": "bicycle_parking", "distanceM": 60, "source": "osm"]]),
+         "sources": [["source": "osm", "sourceId": "way/123", "version": 4, "importedAt": iso(.now)] as JSON],
          "weatherSource": "openmeteo"]
     }
 
@@ -206,7 +208,7 @@ enum UITestFixtures {
         let s = score(spot, at: date)
         return ["tsHour": iso(date), "score": s.score,
                 "components": ["weather": min(100, s.score + 4), "crowd": 70, "amenity": 55, "fresh": 80],
-                "capReason": nullable(s.cap), "reasons": reasons(s.cap), "confidence": 2]
+                "capReason": nullable(s.cap), "reasons": reasons(s.cap), "confidence": 2] as JSON
     }
 
     private static func alertRule() -> [String: Any] {
