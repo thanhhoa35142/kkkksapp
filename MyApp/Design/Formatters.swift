@@ -50,6 +50,20 @@ enum Format {
         }
     }
 
+    /// "12 km/h" / "8 mph" from km/h; follows the distance preference.
+    static func wind(kmh: Double) -> String {
+        let value = Measurement(value: kmh, unit: UnitSpeed.kilometersPerHour)
+        let unit: UnitSpeed
+        switch UnitPreference.current(UnitPreference.distanceKey) {
+        case .metric: unit = .kilometersPerHour
+        case .imperial: unit = .milesPerHour
+        case .automatic: unit = Locale.current.measurementSystem == .metric ? .kilometersPerHour : .milesPerHour
+        }
+        return value.converted(to: unit).formatted(
+            .measurement(width: .abbreviated, usage: .asProvided,
+                         numberFormatStyle: .number.precision(.fractionLength(0))))
+    }
+
     /// "3 PM" in the given time zone.
     static func hour(_ date: Date, in timeZone: TimeZone = .current) -> String {
         var style = Date.FormatStyle.dateTime.hour()

@@ -17,7 +17,8 @@ enum Place: Codable, Equatable {
     }
 }
 
-/// Who's coming — onboarding step 3, light personalization (spec §8).
+/// Who's coming. Stored and sent as a device pref, but no longer asked in
+/// onboarding: the backend doesn't rank by it yet (kept for when it does).
 enum Companion: String, CaseIterable, Codable, Identifiable {
     case kids, dog, friends, couple
     var id: String { rawValue }
@@ -29,6 +30,22 @@ enum Companion: String, CaseIterable, Codable, Identifiable {
         case .friends: String(localized: "Friends")
         case .couple: String(localized: "Just us two")
         }
+    }
+}
+
+/// A locked forecast day's best hour — data Free already sees in the
+/// Spot Detail week strip, shown again on the paywall it opens.
+struct ForecastTeaser: Equatable {
+    let day: Date
+    let hour: Date
+    let score: Int
+    let timeZone: TimeZone
+
+    /// "Saturday peaks at 87 at 2 PM."
+    var text: String {
+        var weekday = Date.FormatStyle.dateTime.weekday(.wide)
+        weekday.timeZone = timeZone
+        return String(localized: "\(day.formatted(weekday)) peaks at \(score) at \(Format.hour(hour, in: timeZone)).")
     }
 }
 
@@ -48,6 +65,9 @@ final class AppState {
     var selectedTab: AppTab = .bestNow
     /// Non-nil = paywall sheet open, opened from this touch point.
     var paywall: PaywallReason?
+    /// Real Free-plan data for the locked day that opened the paywall
+    /// ("Saturday peaks at 87 at 2 PM"). Cleared when the paywall closes.
+    var paywallTeaser: ForecastTeaser?
     /// Non-nil = exit survey showing for a paywall opened from this point.
     var survey: PaywallReason?
     private var lastPaywallReason: PaywallReason?
@@ -200,8 +220,9 @@ final class AppState {
             Log.api.error("device register failed: \(error.localizedDescription)")
         }
         await refreshEntitlement()
-        await alerts.load()
         listenForTransactions()
+        await linkCurrentEntitlements()
+        await alerts.load()
         await EventQueue.shared.flush(client: api, deviceID: deviceID)
     }
 
@@ -235,6 +256,28 @@ final class AppState {
             Log.store.error("link transaction failed: \(error.localizedDescription)")
         }
         await refreshEntitlement()
+    }
+
+    /// Launch: a device that holds an App Store entitlement the backend does
+    /// not know yet links it without the user tapping Restore. This is how a
+    /// Family Sharing member (who never purchases on this device), a
+    /// reinstall and a second device get Plus. No App Store sign-in prompt:
+    /// `currentEntitlements` reads the local StoreKit state only.
+    private func linkCurrentEntitlements() async {
+        guard !isPlus else { return }
+        var linked = false
+        for await result in Transaction.currentEntitlements {
+            guard case .verified(let transaction) = result,
+                  PaywallSheet.productIDs.contains(transaction.productID) else { continue }
+            do {
+                _ = try await api.linkTransaction(deviceID: DeviceIdentity.deviceID,
+                                                  signedTransaction: result.jwsRepresentation)
+                linked = true
+            } catch {
+                Log.store.error("link current entitlement failed: \(error.localizedDescription)")
+            }
+        }
+        if linked { await refreshEntitlement() }
     }
 
     /// Restore: re-syncs with the App Store and links current entitlements.
@@ -272,6 +315,7 @@ final class AppState {
     /// Root paywall sheet closed. Not called for the paywall pushed inside
     /// the Alert editor — no survey on top of an unsaved form.
     func paywallDidDismiss() {
+        paywallTeaser = nil
         guard !purchasedInPaywall, !isPlus, let reason = lastPaywallReason else { return }
         lastPaywallReason = nil
         if PaywallSurvey.registerDismissal() {

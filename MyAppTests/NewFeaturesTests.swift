@@ -95,4 +95,39 @@ final class NewFeaturesTests: XCTestCase {
         XCTAssertEqual(calendar.component(.hour, from: a), 10)
         XCTAssertEqual(calendar.component(.day, from: b), 14)
     }
+
+    func testShareLinkRoundTrip() throws {
+        let id = UUID()
+        let base = try XCTUnwrap(URL(string: "https://share.example"))
+        let url = try XCTUnwrap(SpotLink.shareURL(spotID: id, base: base))
+        XCTAssertEqual(url.absoluteString, "https://share.example/s/\(id.uuidString.lowercased())")
+        XCTAssertEqual(SpotLink.spotID(from: url, shareBase: base), id)
+        // No share host configured: no branded link, and web URLs are ignored.
+        XCTAssertNil(SpotLink.shareURL(spotID: id, base: nil))
+        XCTAssertNil(SpotLink.spotID(from: url, shareBase: nil))
+        // Other hosts and other paths are not ours.
+        let other = try XCTUnwrap(URL(string: "https://evil.example/s/\(id.uuidString)"))
+        XCTAssertNil(SpotLink.spotID(from: other, shareBase: base))
+        let wrongPath = try XCTUnwrap(URL(string: "https://share.example/x/\(id.uuidString)"))
+        XCTAssertNil(SpotLink.spotID(from: wrongPath, shareBase: base))
+    }
+
+    func testForecastPointDecodesOptionalWeather() throws {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let withWeather = Data("""
+        {"tsHour":"2026-11-14T12:00:00Z","score":70,"components":{"weather":60},"reasons":[],"confidence":2,
+         "weather":{"tempC":21.3,"precipProb":10,"windKmh":12.4}}
+        """.utf8)
+        let point = try decoder.decode(ForecastPoint.self, from: withWeather)
+        XCTAssertEqual(point.weather?.tempC, 21.3)
+        XCTAssertEqual(point.weather?.precipProb, 10)
+        XCTAssertNil(point.weather?.feelsLikeC)
+        XCTAssertEqual(point.weather?.hasValues, true)
+
+        let without = Data("""
+        {"tsHour":"2026-11-14T12:00:00Z","score":70,"components":{},"reasons":[],"confidence":2}
+        """.utf8)
+        XCTAssertNil(try decoder.decode(ForecastPoint.self, from: without).weather)
+    }
 }

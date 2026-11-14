@@ -9,5 +9,11 @@
     <array>
         <string>group.com.example.MyApp</string>
     </array>
+    <!-- Universal links: https://pickhour.app/s/<spotId> opens the app
+         (host must equal Info.plist ShareBaseURL). -->
+    <key>com.apple.developer.associated-domains</key>
+    <array>
+        <string>applinks:pickhour.app</string>
+    </array>
 </dict>
 </plist>

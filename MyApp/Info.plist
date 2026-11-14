@@ -29,6 +29,10 @@
             </array>
         </dict>
     </array>
+    <!-- Share page host: shared links are <ShareBaseURL>/s/<spotId>. Must match
+         the applinks: domain in the entitlements. Empty = share Apple Maps links. -->
+    <key>ShareBaseURL</key>
+    <string>https://pickhour.app</string>
     <key>APIBaseURL</key>
     <string>http://localhost:8080</string>
 </dict>
