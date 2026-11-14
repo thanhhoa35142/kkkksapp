@@ -8,7 +8,6 @@ actor EventQueue {
     private var pending: [AppEvent] = []
     private let fileURL: URL
     private let encoder = JSONEncoder()
-    private let decoder = JSONDecoder()
 
     init(fileURL: URL? = nil) {
         if let fileURL {
@@ -21,7 +20,9 @@ actor EventQueue {
             self.fileURL = URL(fileURLWithPath: NSTemporaryDirectory())
                 .appendingPathComponent("event-queue.json")
         }
-        load()
+        // Read synchronously from a nonisolated helper: an actor's init can't
+        // call its isolated methods (error in Swift 6 mode).
+        pending = Self.read(from: self.fileURL)
     }
 
     var count: Int { pending.count }
@@ -55,9 +56,9 @@ actor EventQueue {
 
     // MARK: - Persistence
 
-    private func load() {
-        guard let data = try? Data(contentsOf: fileURL) else { return }
-        pending = (try? decoder.decode([AppEvent].self, from: data)) ?? []
+    private static func read(from url: URL) -> [AppEvent] {
+        guard let data = try? Data(contentsOf: url) else { return [] }
+        return (try? JSONDecoder().decode([AppEvent].self, from: data)) ?? []
     }
 
     private func persist() {

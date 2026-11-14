@@ -19,10 +19,46 @@ extension Color {
     /// Light Meadow wash behind the score number / selected state.
     /// Only for large or bold text on top (contrast ≈ 4.4:1 in light mode).
     static let brandSoft = Color("MeadowSoft")
+
+    /// The grouped list's own background (behind a pinned header over a List).
+    static var groupedBackground: Color {
+        #if os(iOS)
+        Color(uiColor: .systemGroupedBackground)
+        #else
+        Color(nsColor: .windowBackgroundColor)
+        #endif
+    }
 }
 
 extension PlatformColor {
     static var brand: PlatformColor { PlatformColor(named: "AccentColor") ?? .systemGreen }
+
+    /// Map only: Good-tier pin balloon, a lighter (light mode) / dimmer (dark
+    /// mode) Meadow so 60 and 98 don't look identical on the map. Same hue,
+    /// different intensity — never a new color (UI_SPEC §2, "MeadowMapGood").
+    /// Light #A1C4B0 with glyph #1F5E39 (≈ 4:1); dark #2E6441 with white (≈ 7:1).
+    static var brandMapGood: PlatformColor {
+        dynamic(light: rgb(0xA1, 0xC4, 0xB0), dark: rgb(0x2E, 0x64, 0x41))
+    }
+
+    /// Glyph (score number) on the Good-tier balloon.
+    static var brandMapGoodGlyph: PlatformColor {
+        dynamic(light: rgb(0x1F, 0x5E, 0x39), dark: .white)
+    }
+
+    private static func rgb(_ r: Int, _ g: Int, _ b: Int) -> PlatformColor {
+        PlatformColor(red: CGFloat(r) / 255, green: CGFloat(g) / 255, blue: CGFloat(b) / 255, alpha: 1)
+    }
+
+    private static func dynamic(light: PlatformColor, dark: PlatformColor) -> PlatformColor {
+        #if os(iOS)
+        UIColor { traits in traits.userInterfaceStyle == .dark ? dark : light }
+        #else
+        NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
+        }
+        #endif
+    }
 }
 
 // MARK: - Score tiers
@@ -55,6 +91,24 @@ enum ScoreTier {
         case .great, .good: .brand
         case .fair: .systemOrange
         case .poor: .systemGray
+        }
+    }
+
+    /// Map pins only: Great solid Meadow, Good a lighter Meadow (intensity,
+    /// not hue). Lists keep `color` — there the number and label carry it.
+    var mapTint: PlatformColor {
+        switch self {
+        case .great: .brand
+        case .good: .brandMapGood
+        case .fair: .systemOrange
+        case .poor: .systemGray
+        }
+    }
+
+    var mapGlyph: PlatformColor {
+        switch self {
+        case .good: .brandMapGoodGlyph
+        default: .white
         }
     }
 
@@ -144,6 +198,17 @@ extension View {
     func inlineTitle() -> some View {
         #if os(iOS)
         navigationBarTitleDisplayMode(.inline)
+        #else
+        self
+        #endif
+    }
+
+    /// Hides the navigation bar on iOS (map sheet header replaces it);
+    /// no-op on macOS.
+    @ViewBuilder
+    func hidesNavigationBar(_ hidden: Bool) -> some View {
+        #if os(iOS)
+        toolbar(hidden ? .hidden : .automatic, for: .navigationBar)
         #else
         self
         #endif

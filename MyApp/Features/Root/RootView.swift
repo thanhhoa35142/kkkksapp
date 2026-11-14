@@ -25,11 +25,17 @@ struct RootView: View {
                 app.selectedTab = .map
                 app.open(spotID: id, focusMap: true)
             }
-            .onOpenURL { url in
-                guard let id = SpotLink.spotID(from: url) else { return }
-                app.track("deep_link_opened", ["host": .string(url.host ?? "")])
-                DeepLinkRouter.shared.handle(spotID: id)
+            .onOpenURL { url in openLink(url) }
+            // Universal links (share page) can arrive as a browsing activity.
+            .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                if let url = activity.webpageURL { openLink(url) }
             }
+    }
+
+    private func openLink(_ url: URL) {
+        guard let id = SpotLink.spotID(from: url) else { return }
+        app.track("deep_link_opened", ["host": .string(url.host ?? "")])
+        DeepLinkRouter.shared.handle(spotID: id)
     }
 
     private var isCompact: Bool {

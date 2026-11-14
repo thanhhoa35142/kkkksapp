@@ -31,8 +31,12 @@ struct CrowdReportSection: View {
     var body: some View {
         Section {
             if let sentLevel {
-                Label("Thanks — you said \(sentLevel.title.lowercased()).", systemImage: "checkmark")
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    ConfirmationMark()
+                    Text("Thanks, you said \(sentLevel.title.lowercased()).")
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
             } else {
                 HStack(spacing: 8) {
                     ForEach(Level.allCases) { level in

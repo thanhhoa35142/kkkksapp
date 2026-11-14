@@ -7,10 +7,14 @@ import SwiftUI
 @MainActor @Observable
 final class SavedScoresModel {
     private(set) var scores: [UUID: ScoreSnapshot] = [:]
+    /// Dims the rows once while a new hour loads (one motion, UI_SPEC §8).
+    private(set) var isRefreshing = false
 
     func load(favorites: [FavoriteSpot], when: WhenSelection) async {
         let ids = favorites.map(\.spotID)
         guard !ids.isEmpty else { scores = [:]; return }
+        isRefreshing = !scores.isEmpty
+        defer { isRefreshing = false }
         do {
             let collection = try await AppConfig.apiClient.spots(ids: ids, when: when.apiDate)
             var result: [UUID: ScoreSnapshot] = [:]
@@ -41,28 +45,26 @@ struct SavedScreen: View {
         NavigationStack {
             List {
                 if favorites.isEmpty {
-                    ContentUnavailableView {
-                        Label("No saved places", systemImage: "heart")
-                    } description: {
-                        Text("Tap Save on a spot to keep it here.")
+                    // Alerts follow below, so this is a plain row, not a
+                    // full-screen ContentUnavailableView squeezed into a cell.
+                    Section("Places") {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("No saved places")
+                                .font(.headline)
+                            Text("Tap Save on a spot to keep it here.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 4)
                     }
-                } else {
+                } else if app.isPlus {
+                    // Plus: the week plan is the reason to open this tab.
                     WeekPlanSection(favorites: favorites, plan: plan)
-                    Section {
-                        ForEach(favorites) { favorite in
-                            let spot = model.summary(for: favorite)
-                            NavigationLink(value: favorite.spotID) { SpotRow(spot: spot) }
-                                .contextMenu { SpotContextMenu(spot: spot) }
-                        }
-                        .onMove(perform: move)
-                        .onDelete(perform: delete)
-                    } header: {
-                        Text("Places · \(app.when.label)")
-                    } footer: {
-                        if !app.isPlus {
-                            Text("\(favorites.count) of \(Favorites.freeLimit) on the Free plan")
-                        }
-                    }
+                    placesSection
+                } else {
+                    // Free: their own places first, the upsell after.
+                    placesSection
+                    WeekPlanSection(favorites: favorites, plan: plan)
                 }
                 AlertsSection(editing: $editingAlert)
             }
@@ -104,6 +106,26 @@ struct SavedScreen: View {
         }
     }
 
+    private var placesSection: some View {
+        Section {
+            ForEach(favorites) { favorite in
+                let spot = model.summary(for: favorite)
+                NavigationLink(value: favorite.spotID) { SpotRow(spot: spot) }
+                    .contextMenu { SpotContextMenu(spot: spot) }
+                    .opacity(model.isRefreshing ? 0.4 : 1)
+                    .animation(.easeInOut(duration: 0.2), value: model.isRefreshing)
+            }
+            .onMove(perform: move)
+            .onDelete(perform: delete)
+        } header: {
+            Text("Places · \(app.when.label)")
+        } footer: {
+            if !app.isPlus {
+                Text("\(favorites.count) of \(Favorites.freeLimit) on the Free plan")
+            }
+        }
+    }
+
     private struct TaskKey: Equatable {
         let ids: [UUID]
         let when: WhenSelection
@@ -141,9 +163,7 @@ struct AlertsSection: View {
                     .foregroundStyle(.secondary)
             }
             ForEach(app.alerts.rules) { rule in
-                AlertRow(rule: rule, name: name(for: rule))
-                    .contentShape(Rectangle())
-                    .onTapGesture { editing = rule }
+                AlertRow(rule: rule, name: name(for: rule)) { editing = rule }
                     .swipeActions(edge: .trailing) {
                         Button("Delete", role: .destructive) {
                             Task { await app.alerts.delete(rule) }

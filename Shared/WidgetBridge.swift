@@ -1,8 +1,6 @@
 import Foundation
 
-/// What the app hands the widget through the shared App Group. Compiled
-/// into both the app and the PickhourWidget extension (Shared/ folder).
-/// Only a coarse point (2 decimals ≈ 1 km) — never the precise location.
+
 enum WidgetBridge {
     /// Must match `com.apple.security.application-groups` in the app's and
     /// the widget's entitlements (rename together with the bundle ID).

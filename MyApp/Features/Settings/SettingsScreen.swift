@@ -1,5 +1,6 @@
 import CoreLocation
 import SwiftData
+import StoreKit
 import SwiftUI
 import UserNotifications
 
@@ -15,6 +16,7 @@ struct SettingsScreen: View {
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
     @State private var confirmDelete = false
     @State private var isRestoring = false
+    @State private var showManageSubscriptions = false
 
     var body: some View {
         Form {
@@ -26,6 +28,9 @@ struct SettingsScreen: View {
         }
         .formStyle(.grouped)
         .navigationTitle("Settings")
+        #if os(iOS)
+        .manageSubscriptionsSheet(isPresented: $showManageSubscriptions)
+        #endif
         .task { notificationStatus = await PushManager.shared.authorizationStatus() }
         .confirmationDialog("Delete your data?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete My Data", role: .destructive) {
@@ -52,6 +57,8 @@ struct SettingsScreen: View {
                 if entitlement.isFamilyShared {
                     Text("Shared with you through Family Sharing")
                         .foregroundStyle(.secondary)
+                } else {
+                    Button("Manage Subscription") { manageSubscription() }
                 }
             } else {
                 LabeledContent("Current plan", value: String(localized: "Free"))
@@ -98,7 +105,9 @@ struct SettingsScreen: View {
 
     private var privacySection: some View {
         Section("Privacy") {
-            Button("Show Welcome Again") { onboardingDone = false }
+            if let url = AppConfig.privacyPolicyURL {
+                Link("Privacy Policy", destination: url)
+            }
             Button("Delete My Data", role: .destructive) { confirmDelete = true }
         }
     }
@@ -106,6 +115,13 @@ struct SettingsScreen: View {
     private var aboutSection: some View {
         Section("About") {
             NavigationLink("Data Sources") { DataSourcesView() }
+            if let url = AppConfig.termsOfUseURL {
+                Link("Terms of Use", destination: url)
+            }
+            if let url = AppConfig.feedbackMailURL {
+                Link("Send Feedback", destination: url)
+            }
+            Button("Show Welcome Again") { onboardingDone = false }
             LabeledContent("Version", value: version)
         }
     }
@@ -130,6 +146,16 @@ struct SettingsScreen: View {
         let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–"
         let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "–"
         return "\(v) (\(b))"
+    }
+
+    /// iOS: StoreKit's own sheet. macOS has no such sheet, so it opens the
+    /// App Store's subscriptions page (Apple's documented link).
+    private func manageSubscription() {
+        #if os(iOS)
+        showManageSubscriptions = true
+        #else
+        if let url = URL(string: "https://apps.apple.com/account/subscriptions") { openURL(url) }
+        #endif
     }
 
     private func openSystemSettings() {

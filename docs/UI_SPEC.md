@@ -28,8 +28,8 @@ File này là spec bố cục và màn hình. Các chi tiết tương tác đã 
 | **Spam icon:** icon trước mọi label, mọi tiêu đề section, mọi nút, mọi hàng Settings (kể cả ô vuông màu kiểu app Settings) | Theo "ngân sách icon" ở §2: icon chỉ khi nó mang nghĩa |
 | **Sparkles và icon "AI/magic":** `sparkles`, `wand.and.stars`, `wand.and.rays`, `star.circle`, `bolt` để chỉ "thông minh" hay "nhanh", ✨ trong copy, chữ "AI-powered", "Smart picks" | Nói thẳng việc app làm: "Best Now", "Why 82?" |
 | **Icon user/avatar:** `person.crop.circle` ở góc nav bar, ảnh đại diện giả, lời chào "Hi there 👋" | App không có tài khoản, nên không có avatar; Settings là một tab |
-| Hero card "Top pick" kiểu landing page | Hàng đầu danh sách là kết quả số 1, cùng kiểu với các hàng khác |
-| Onboarding carousel lướt trang (`TabView(.page)`), splash animation, xin quyền thông báo hoặc hiện paywall trong onboarding | Onboarding 3 bước kiểu Welcome của Apple (S0); quyền thông báo xin đúng lúc cần |
+| Hero card "Top pick" kiểu landing page (card, bóng, ảnh) | Kết quả số 1 là một section riêng "Top pick" trong cùng `List`: cùng `SpotRow`, vòng điểm 56pt, luôn có dòng giờ. Không card, không bóng |
+| Onboarding carousel lướt trang (`TabView(.page)`), splash animation, xin quyền thông báo hoặc hiện paywall trong onboarding | Onboarding 2 bước kiểu Welcome của Apple (S0); quyền thông báo xin đúng lúc cần |
 | Shimmer skeleton khắp nơi | `.redacted(reason: .placeholder)` trên đúng layout thật |
 | Copy chung chung kiểu "Discover amazing spots!", "Your perfect day awaits" | Copy cụ thể: "82 · Clear, 21°, quiet" |
 | Chữ IN HOA, letter-spacing rộng cho label | Text style hệ thống (`.headline`, `.footnote`…) |
@@ -44,11 +44,11 @@ File này là spec bố cục và màn hình. Các chi tiết tương tác đã 
 
 ## 1. Danh sách màn hình
 
-Gồm **1 luồng onboarding (3 bước), 4 tab gốc, 1 màn push và 7 sheet, tổng 13 view**. Widget để giai đoạn sau (mục 6).
+Gồm **1 luồng onboarding (2 bước), 4 tab gốc, 1 màn push và 7 sheet, tổng 13 view**. Widget để giai đoạn sau (mục 6).
 
 | # | Màn hình | Loại | Yêu cầu | Ưu tiên |
 |---|---|---|---|---|
-| S0 | **Onboarding** (Welcome → Where → Who) | `fullScreenCover`, chỉ lần đầu | F3, cá nhân hóa §8 | P0 |
+| S0 | **Onboarding** (Welcome → Where) | `fullScreenCover`, chỉ lần đầu | F3, cá nhân hóa §8 | P0 |
 | S1 | **Best Now** (gợi ý quanh tôi) | Tab 1 | D2, D3, F3 | P0 |
 | S2 | **Map** | Tab 2 | F1, F3, D4 | P0 |
 | S3 | **Saved** (yêu thích + cảnh báo) | Tab 3 | F5, D6 | P0 / P1 |
@@ -69,7 +69,7 @@ Tìm kiếm (S12) không phải màn riêng: đó là `.searchable` kết hợp 
 ### Sơ đồ điều hướng
 
 ```
-Onboarding (fullScreenCover, lần đầu) ──▶ Welcome ─push─▶ Where ─push─▶ Who ──dismiss──▶
+Onboarding (fullScreenCover, lần đầu) ──▶ Welcome ─push─▶ Where ──(vị trí / chọn thành phố)──dismiss──▶
 TabView
 ├─ Best Now ── NavigationStack ── [row] ──push──▶ Spot Detail ──sheet──▶ Why 82? / Report / Alert editor
 │     toolbar: [Location ▾]  [When ▾]  [Filter]
@@ -115,7 +115,8 @@ Toàn bộ giao diện là các lớp nền xám trung tính của hệ thống.
 
 | Token | Màu | Dùng cho |
 |---|---|---|
-| tier Great / Good | Meadow | Điểm 60–100 (khác nhau bằng số, nhãn và độ đầy Gauge) |
+| tier Great / Good | Meadow | Điểm 60–100 (khác nhau bằng số, nhãn và độ đầy Gauge). **Riêng pin trên map:** Great = Meadow đặc, Good = `MeadowMapGood` (cùng sắc, nhạt hơn: light `#A1C4B0` glyph `#1F5E39`, dark `#2E6441` glyph trắng) vì pin không có vòng |
+| cluster trên map | `systemGray` | Số lượng điểm; xám để con số trên bóng xanh luôn là điểm, không phải số lượng |
 | tier Fair | `.orange` | Điểm 40–59 |
 | tier Poor | `.secondary` | Điểm < 40 |
 | warning | `.orange` | Bị chặn trần vì mưa hoặc nóng (kèm symbol) |
@@ -127,7 +128,7 @@ Quy tắc:
 - Không `.shadow`. Độ nổi là chuyện của hệ thống: sheet, menu và overlay trên map đã có material và bóng riêng.
 - Tỷ lệ màu trên một màn ước chừng 90% trung tính, 8% Meadow, 2% trạng thái. Không màn nào có quá 2 phần tử nền Meadow đặc (thường chỉ nút chính).
 - Độ tương phản: Meadow light trên trắng khoảng 5.0:1, dark trên đen khoảng 10:1, đều đạt AA. Meadow trên `MeadowSoft` chỉ khoảng 4.4:1 ở light, nên cặp này **chỉ dùng cho chữ lớn hoặc đậm** (số điểm, ≥ 17pt semibold), không dùng cho chữ thường. Kiểm lại bằng Accessibility Inspector trên máy thật.
-- Vì sao Great và Good cùng màu: hai sắc xanh lá gần nhau rất khó phân biệt, nhất là với người mù màu.
+- Vì sao Great và Good cùng màu trong list: hai sắc xanh lá gần nhau rất khó phân biệt, nhất là với người mù màu; vòng điểm và nhãn đã phân biệt. Trên map pin không có vòng nên Good dùng độ đậm nhạt khác (không phải sắc mới).
 - `ScoreBadge.swift` hiện dùng `.green/.mint/.orange/.red` → đổi thành Meadow/Meadow/orange/secondary, nền `MeadowSoft`.
 - Bị chặn trần vì mưa hoặc nóng (`capReason`): thêm symbol `cloud.rain.fill` hoặc `thermometer.sun.fill` cạnh số.
 
@@ -185,7 +186,9 @@ Kích thước tham chiếu là iPhone 15 (393×852pt). Wireframe chỉ thể hi
 
 ### S0 · Onboarding (chỉ lần đầu mở app)
 
-Theo mẫu màn Welcome trong app của chính Apple (Notes, Freeform, Journal), **không** phải carousel lướt trang. Hiện bằng `fullScreenCover` khi `@AppStorage("onboardingDone") == false`. Bên trong là một `NavigationStack` 3 bước, chuyển bằng push chuẩn, có nút Back. Từ lúc mở app đến lúc thấy nội dung tối đa 3 lần chạm.
+Theo mẫu màn Welcome trong app của chính Apple (Notes, Freeform, Journal), **không** phải carousel lướt trang. Hiện bằng `fullScreenCover` khi `@AppStorage("onboardingDone") == false`. Bên trong là một `NavigationStack` 2 bước, chuyển bằng push chuẩn, có nút Back. Từ lúc mở app đến lúc thấy nội dung tối đa 2 lần chạm (3 nếu chọn thành phố).
+
+> **Đã bỏ bước 3 "Who"** (2026-11): backend chưa xếp hạng theo người đi cùng, hỏi thì là hứa điều app không làm. `Companion` và `AppState.companions` vẫn giữ để dùng lại khi backend hỗ trợ. Wireframe bước 3 bên dưới chỉ để tham khảo.
 
 ```
  Bước 1 · Welcome              Bước 2 · Where                Bước 3 · Who (tùy chọn)
@@ -213,9 +216,10 @@ Theo mẫu màn Welcome trong app của chính Apple (Notes, Freeform, Journal),
 
 - **Bước 1 · Welcome:** ảnh App Icon thật cỡ 64pt (bo góc theo `RoundedRectangle(cornerRadius: 14, style: .continuous)`), không dùng SF Symbol phóng to làm logo. Tiêu đề `.largeTitle.bold()`. Ba hàng `Label`: icon Meadow `.hierarchical` cỡ `.title2`, tiêu đề `.headline` và mô tả `.subheadline` màu secondary. Nút "Continue" `.borderedProminent` `.controlSize(.large)` rộng hết khung, nằm trong `safeAreaInset(edge: .bottom)`. Đây là màn duy nhất có ghi nguồn OSM ngay từ đầu.
 - **Bước 2 · Where:** "Use My Location" gọi xin quyền *when in use* ngay khi bấm (đúng ngữ cảnh, theo `UI.md`); được cấp hay bị từ chối đều đi tiếp. "Choose a City" push sang danh sách city pack theo nước (`.searchable`) và ghi nhớ vị trí mặc định. Không có nút Skip vì app cần một vị trí để trả lời.
-- **Bước 3 · Who:** `List` chọn nhiều, mỗi hàng có checkmark; có thể không chọn gì. Lựa chọn được lưu thành filter mặc định và cá nhân hóa nhẹ: Kids tăng trọng số toilet và playground (yêu cầu §8), Dog bật filter dog area. Có Skip; "Start Exploring" đóng cover và vào thẳng Best Now.
+- **Bước 3 · Who (đã bỏ, xem ghi chú trên):** `List` chọn nhiều, mỗi hàng có checkmark; có thể không chọn gì. Lựa chọn được lưu thành filter mặc định và cá nhân hóa nhẹ: Kids tăng trọng số toilet và playground (yêu cầu §8), Dog bật filter dog area. Có Skip; "Start Exploring" đóng cover và vào thẳng Best Now.
 - **Không có trong onboarding:** xin quyền thông báo, paywall, tạo tài khoản, slide giới thiệu tính năng.
-- Ghi sự kiện `onboarding_completed` (kèm bước đã bỏ qua) qua `EventQueue`. Settings có mục "Show Welcome Again" để xem lại.
+- Chọn vị trí hoặc chọn thành phố ở bước 2 là xong onboarding. Ghi sự kiện `onboarding_completed {place: location|city}` qua `EventQueue`.
+- **M2 ở Welcome:** cột mọc lên (0.5 s) rồi cột giờ tốt nhất đổi Meadow và `ScoreBadge` thật đếm từ 0 lên điểm giờ đó (0.5 s), nối bằng completion của `withAnimation`, không `sleep`. Ghi rõ "Example day". Settings có mục "Show Welcome Again" để xem lại.
 - Dynamic Type lớn: màn Welcome nằm trong `ScrollView`, nút vẫn dính đáy nhờ `safeAreaInset`.
 
 ### S1 · Best Now (tab 1, màn mở app)
@@ -250,6 +254,9 @@ Theo mẫu màn Welcome trong app của chính Apple (Notes, Freeform, Journal),
 - **Bỏ qua onboarding hoặc từ chối quyền vị trí:** thay danh sách bằng một section có 2 nút, "Use My Location" (`.borderedProminent`) và "Choose a City" (mở S12). Chỉ xin quyền khi bấm nút.
 - **Ngoài vùng phủ** (không có city pack gần): `ContentUnavailableView("No spots here yet", systemImage: "map", description: "Pickhour covers 39 cities in 18 countries.")` kèm nút "Browse Cities".
 - Free hiện 3 kết quả, Plus không giới hạn (§15). Server đã giới hạn sẵn; app chỉ hiện hàng upsell.
+- **Kết quả số 1 là "câu trả lời":** section riêng "Top pick · <giờ>", `ScoreBadge` 56pt; các hàng còn lại ở section "More nearby". Cùng `SpotRow`, không card.
+- **Dòng giờ dưới mỗi hàng** (Meadow, `.footnote` semibold): "Better at 4 PM · 88" (giờ sau trong ngày của điểm cao hơn ≥ 5), "Good until 6 PM" / "Good through 9 PM" (đang ≥ 60), hoặc "No better hour later today" (secondary). Dữ liệu: sau khi có danh sách, gọi `GET /v1/spots?ids=…&from=<when>&hours=n` (n ≤ 12; Free cắt trước ngày kia, `HourWindow`). Bỏ qua giờ `dark`/`twilight`. Logic thuần trong `HourOutlook` (có unit test).
+- **Trạng thái rỗng / tối / lỗi / lọc hết:** `ContentUnavailableView` là `.overlay` của `List` rỗng, không đặt trong một hàng. Trong sidebar iPad/Mac (list còn Saved, Alerts) là một hàng chữ gọn kèm nút.
 
 ### S2 · Map (tab 2)
 
@@ -272,11 +279,12 @@ Theo mẫu màn Welcome trong app của chính Apple (Notes, Freeform, Journal),
 └─────────────────────────────────────┘
 ```
 
-- **Gom cụm (F1) cần `MKMapView`** qua `UIViewRepresentable`: SwiftUI `Map` trên iOS 17 chưa hỗ trợ clustering. Dùng `MKMarkerAnnotationView` với `clusteringIdentifier`, `glyphText` là điểm số, `markerTintColor` theo tier. Vẫn là component chuẩn của Apple.
+- **Gom cụm (F1) cần `MKMapView`** qua `UIViewRepresentable`: SwiftUI `Map` trên iOS 17 chưa hỗ trợ clustering. Dùng `MKMarkerAnnotationView` với `clusteringIdentifier`, `glyphText` là điểm số, `markerTintColor` theo tier (Good nhạt hơn Great, §2), cluster màu `systemGray`. Vẫn là component chuẩn của Apple.
 - Zoom gần (ví dụ span < 0.05°): vẽ `MKPolygon` của công viên (`area` từ S5 hoặc từ GeoJSON của bbox) với viền Meadow 1.5pt và phần tô `MeadowFill`. Đây là thứ thay cho ảnh.
-- Chạm pin mở sheet S5 với `.presentationDetents([.height(200), .large])` và `.presentationBackgroundInteraction(.enabled(upThrough: .height(200)))`, giống Apple Maps. Kéo lên `.large` để xem đầy đủ.
+- Chạm pin mở sheet S5 với `.presentationDetents([.height(220), .large])` và `.presentationBackgroundInteraction(.enabled(upThrough: .height(220)))`, giống Apple Maps. 220pt đầu là phần tóm tắt ghim cố định (không nav bar): tên + dòng phụ (kèm Save, Share dạng nút tròn), số điểm + tier + giờ, Directions + Alert. Kéo lên `.large` để xem phần còn lại cuộn bên dưới.
 - Chỉ gọi `GET /v1/spots?bbox=` khi map dừng di chuyển (debounce 300ms qua `.task(id:)`). Nút "Search This Area" chỉ hiện khi khung nhìn đã đi quá 30% so với lần tải trước.
-- Attribution OSM: `MKMapView` tự hiện "Legal" của Apple; thêm nhãn "© OpenStreetMap" (`.caption2`) ở góc dưới trái, phía trên chỗ Legal.
+- Attribution OSM: `MKMapView` tự hiện "Legal" của Apple (dưới trái) và nút zoom trên Mac (dưới phải); nhãn "© OpenStreetMap" (`.caption2`) nằm **giữa đáy**, trong cùng VStack với thanh time-lapse, không dùng padding cứng.
+- **Time-lapse (M1):** thanh gồm nhãn giờ lớn (`.title3` semibold, là điểm neo khi chạy), nút Play/Pause, sparkline điểm trung bình theo giờ của các điểm đang hiện (Swift Charts, phẳng, giờ đang chọn = Meadow) và `Slider` bên dưới. Không còn nút "Done". **Quy tắc:** kéo hoặc Play chỉ *xem trước* giờ trên pin; "When" của app không đổi. Chạm một pin khi đang xem trước thì giờ đó thành "When" (Spot Detail hiện đúng giờ của pin). Đổi "When" ở chỗ khác thì thoát xem trước. Free không kéo quá ngày mai. Pin đổi số/màu bằng cross-fade 0.2 s (`CATransition` trên layer của annotation view), bỏ khi Reduce Motion. Haptic chỉ khi người dùng đang kéo. iPhone: ẩn thanh khi sheet Spot Detail đang mở.
 
 ### S5 · Spot Detail
 
@@ -315,11 +323,19 @@ Theo mẫu màn Welcome trong app của chính Apple (Notes, Freeform, Journal),
 ```
 
 - Là `List(.insetGrouped)`; phần header (bản đồ, tên, điểm, nút) là section đầu với `listRowInsets` tự chỉnh.
-- **Biểu đồ giờ (D1):** `Chart { BarMark(x: .value("Hour", h), y: .value("Score", s)) }`, chiều cao 120pt. Màu cột theo tier, cột đang chọn là Meadow đậm. Chạm hoặc kéo dùng `chartXSelection` để đổi giờ đang xem; long-press một giờ thì mở "Remind me at this hour" (`UI.md`).
+- **Mỗi thứ hiện một lần:** tên chỉ ở nội dung (`title2.bold`, 2 dòng; nav title để trống vì tên dài bị cắt). Số điểm chỉ hiện một lần (số lớn + nhãn tier); vòng bên cạnh **không có số** (`ScoreBadge(showsNumber: false)`). Wireframe ở trên còn ghi nav bar có Save/Share: vẫn đúng, chỉ không có tên.
+- **Nút hành động:** Directions `.borderedProminent` chiếm phần lớn hàng, Alert `.bordered` cỡ tự nhiên. **Không còn nút Report** trên hàng này; báo sai thông tin qua "Is this spot still here?" ở About. Gửi xong, hàng đó đổi thành "Thanks. Your report was sent." với dấu check bounce (M5). Lưu alert xong thì chuông bounce.
+- **Biểu đồ:** mọi cột giữ màu tier, cột không phải giờ đang xem mờ đi (opacity 0.45); giờ đang xem có `RuleMark` + nhãn "3 PM · 82" ngay trên biểu đồ. Giờ `dark`/`twilight` có dải nền xám phẳng (`RectangleMark`).
+- **Biểu đồ giờ (D1):** `Chart { BarMark(x: .value("Hour", h), y: .value("Score", s)) }`, chiều cao 120pt. Màu cột theo tier, cột đang chọn giữ màu tier (đậm), các cột khác mờ. Chạm hoặc kéo dùng `chartXSelection` để đổi giờ đang xem; long-press một giờ thì mở "Remind me at this hour" (`UI.md`).
 - **Chọn ngày:** Free xem theo giờ hôm nay và ngày mai (§15). Từ ngày thứ 3 hiện `lock.fill`, bấm vào mở S11 (`reason: forecast`), không làm mờ biểu đồ. Dải điểm tổng mỗi ngày cho Free: ROADMAP 0.15.
-- **Nút hành động:** Directions dùng `MKMapItem.openInMaps`. Alert mở S10 (lần đầu sẽ xin quyền thông báo). Report mở S9. Save nằm trên nav bar (`heart` / `heart.fill`).
+- **Nút hành động:** Directions dùng `MKMapItem.openInMaps`. Alert mở S10 (lần đầu sẽ xin quyền thông báo). Report mở S9 từ About. Save nằm trên nav bar (`heart` / `heart.fill`). Share gửi link Apple Maps kèm dòng "Vondelpark · Today 3 PM · score 82".
+- **Chọn ngày bị khóa (Free):** paywall hiện thêm dòng thật của ngày đó, ví dụ "Saturday peaks at 87 at 2 PM." (dữ liệu Free đã thấy ở week strip).
 - **Độ đông:** khi chỉ có ước lượng từ mô hình, luôn ghi "Estimate" (§16) và mức tin cậy không vượt Medium (server đã giới hạn).
 - **Không có tiện ích:** ẩn hẳn section Amenities, không hiện "No amenities".
+
+**Thời tiết theo giờ (2026-11-14).** Ngay dưới dòng điểm là một hàng ba cột chữ, không icon: nhiệt độ, khả năng mưa, gió (thêm "Feels like" khi lệch từ 2° trở lên), lấy từ `weather` của forecast point đang chọn và đổi theo khi kéo biểu đồ. Cỡ chữ trợ năng thì xếp thành các hàng `LabeledContent`. Giờ nào không có `weather` thì ẩn cả hàng.
+
+**Chia sẻ.** Link chia sẻ là `<ShareBaseURL>/s/<spotId>` (universal link, mở app nếu đã cài, không thì ra trang web của backend); khi `ShareBaseURL` trống thì dùng link Apple Maps như cũ.
 
 ### S3 · Saved (tab 3)
 
@@ -343,7 +359,10 @@ Theo mẫu màn Welcome trong app của chính Apple (Notes, Freeform, Journal),
 - Favorites lưu trên máy bằng SwiftData; Free tối đa 10 (§15). Alerts lấy từ `GET /v1/alerts`, Free 1 khu vực.
 - **This Week (Plus):** mỗi ngày 1 khung giờ đẹp nhất trên 10 điểm đầu tiên của Saved (`GET /v1/spots/{id}/forecast`, gọi song song). Khung giờ: các giờ liền nhau đều ≥ 60, từ 08:00 đến 20:00 giờ địa phương của điểm, bắt đầu từ cặp 2 giờ cao nhất rồi nới ra các giờ kề nhau còn trong vòng 5 điểm, tối đa 4 giờ, cùng giới hạn với job `digest.weekly` (`WeekPlanner`, có unit test). Không ngày nào đạt thì hiện "No 2-hour window scores 60 or more…". Free thấy 1 hàng `lock.fill` "See the best times this week" mở S11 (`reason: planner`). iPad/Mac hiện cùng mục này trong sidebar Explore.
 - **Weekend plan on Thursday:** Toggle trong This Week, bật thì xin quyền thông báo rồi `PUT /v1/devices/{id}/digest` với danh sách Saved (tối đa 20 điểm). Danh sách Saved đổi thì gửi lại. Push `kind: digest.weekend` mở thẳng điểm đó.
-- Trống: `ContentUnavailableView("No saved places", systemImage: "heart", description: "Tap Save on a spot to keep it here.")`.
+- **Thứ tự:** Free: Places trước, This Week (hàng khóa) sau. Plus: This Week trước.
+- Trống: một hàng chữ trong section Places ("No saved places" + "Tap Save on a spot to keep it here."), không đặt `ContentUnavailableView` trong hàng vì Alerts vẫn ở bên dưới.
+- **Hàng alert:** phần chữ là một nút (có chevron) mở Alert editor; `Toggle` là control riêng bên phải để tạm dừng. Không `onTapGesture` cả hàng.
+- **Hàng This Week:** context menu có Share ("Sat 2 PM–6 PM · Vondelpark · 84" + link Apple Maps) và, trên iOS, "Add to Calendar" (`EKEventEditViewController`, không cần quyền lịch).
 
 ### S4 · Settings (tab 4)
 
@@ -353,8 +372,10 @@ Theo mẫu màn Welcome trong app của chính Apple (Notes, Freeform, Journal),
 2. **Units:** Temperature (Automatic/°C/°F), Distance (Automatic/km/mi), dùng `Picker` kiểu `.menu`.
 3. **Permissions:** Location, Notifications, hiện trạng thái kèm nút "Open Settings" (`UIApplication.openSettingsURLString`).
 4. **Language:** một dòng mở cài đặt ngôn ngữ riêng của app trong iOS (per-app language), không tự làm bộ chọn ngôn ngữ.
-5. **Privacy:** Privacy Policy (link); "Delete My Data" (`role: .destructive`, có `confirmationDialog`) gọi `DELETE /v1/devices/{id}`.
-6. **About:** Data Sources & Attribution (push: OSM/ODbL, nguồn thời tiết, crowd = estimate), Version.
+5. **Privacy:** Privacy Policy (link, chỉ hiện khi `AppConfig.privacyPolicyURL` có giá trị); "Delete My Data" (`role: .destructive`, có `confirmationDialog`) gọi `DELETE /v1/devices/{id}`.
+6. **About:** Data Sources & Attribution (push: OSM/ODbL, nguồn thời tiết, crowd = estimate), Terms of Use, Send Feedback (`mailto:`), Show Welcome Again, Version. Link chỉ hiện khi hằng số tương ứng trong `AppConfig` có giá trị.
+
+Plan có thêm "Manage Subscription" cho Plus mua trực tiếp (không Family Sharing): iOS dùng `manageSubscriptionsSheet`, macOS mở `https://apps.apple.com/account/subscriptions`.
 
 ### S6 · When picker (sheet, `.medium`)
 
@@ -366,16 +387,24 @@ Theo mẫu màn Welcome trong app của chính Apple (Notes, Freeform, Journal),
 
 ```
 │ Why 82?                        Done │
-│ Weather     ████████░░  40%    85  │  Gauge(.linearCapacity) cho từng thành phần
-│ Crowd       ██████░░░░  25%    70  │  tên · thanh · trọng số · điểm
-│ Amenities   █████████░  20%    90  │
-│ Shade       ░░░░░░░░░░  10%     —  │  "—" = thiếu dữ liệu, trọng số đã chuẩn hóa lại
-│ Freshness   ███████░░░   5%    75  │
-│ Capped at 40 because of rain risk   │  chỉ khi có capReason
+│ Today 3 PM                          │
+│ ███████▓▓▓▓▒▒▒░░                    │  1 thanh xếp chồng: trọng số × giá trị từng phần
+│ ● Weather                       85  │  Meadow
+│   44% of the score · adds 38        │
+│ ● Crowd                         70  │  Meadow nhạt
+│   28% of the score · adds 19        │
+│ ● Amenities                     90  │  xám
+│ ● Freshness                     75  │  xám nhạt
+│ Capped at 40 because of rain risk   │  chỉ khi có capReason (+ "Without the cap…")
 │ Medium confidence: crowd is an      │
 │ estimate, not live data.            │
-│ Is this score right?   [thumbsdown] [–] [thumbsup]     │  POST /v1/scores/feedback (SF Symbols hand.thumbsdown…)
+│ Is this score right?                │
+│ [Too high] [About right] [Too low]  │  nút chữ, không icon
 ```
+
+- Thanh đóng góp: Swift Charts `BarMark` xếp chồng trên trục 0–100, màu phẳng (Meadow, Meadow nhạt, hai sắc xám), VoiceOver bỏ qua thanh; mỗi hàng đọc "Weather: 85 out of 100, 44% of the score, adds 38 points".
+- Phần không có dữ liệu bị **ẩn** (Shade chưa có nên không hiện). Trọng số hiển thị là trọng số đã chuẩn hóa lại như backend (`Σ wᵢ·vᵢ / Σ wᵢ` trên các phần có dữ liệu), nên các con số cộng lại khớp điểm. Footer giải thích việc chuẩn hóa chỉ khi thiếu một phần đáng lẽ có (Weather, Crowd, Amenities, Freshness).
+- Gửi phản hồi xong: "Thanks. This helps tune the score." + `.sensoryFeedback(.success)`.
 
 ### S8 · Filters (sheet, `.medium`) — P1
 
@@ -477,16 +506,16 @@ Nguyên tắc: **chuyển động chỉ để giải thích thay đổi, không 
 | Sheet, kéo giữa các detent | `.sheet` + `presentationDetents` | hệ thống | hệ thống | Giữ |
 | Mở/đóng onboarding | `fullScreenCover` mặc định | hệ thống | hệ thống | Giữ |
 | Đổi tab | Không animation (mặc định của iOS) | 0 | – | Giữ; cấm tự thêm hiệu ứng đổi tab |
-| **Số điểm đổi khi đổi "When"** | `.contentTransition(.numericText(value:))` + `.animation(.snappy(duration: 0.25), value: score)` | 0.25 s | chỉ crossfade (`.opacity`) | Giữ, đây là animation đặc trưng |
-| Vòng Gauge đầy hoặc vơi | `.animation(.easeInOut(duration: 0.25), value: score)` | 0.25 s | đổi ngay | Giữ |
-| Danh sách sắp xếp lại khi đổi giờ | **Không** animate việc đổi thứ tự (nhảy hàng hàng loạt rất rối) | 0 | – | Chỉ số trong badge animate |
-| Kéo trên biểu đồ giờ | Highlight cột đổi ngay + `.sensoryFeedback(.selection, trigger: hour)` | 0 | như cũ | Giữ; haptic thay cho animation |
+| **Số điểm đổi ở chỗ chỉ có một giá trị** (số lớn ở Spot Detail, kéo biểu đồ) | `.contentTransition(.numericText(value:))` + `.animation(.smooth(duration: 0.3), value: score)`; vòng đi cùng **một** đường cong | 0.25–0.3 s | chỉ crossfade (`.opacity`), vòng đổi ngay | Giữ, đây là animation đặc trưng |
+| `ScoreBadge` trong danh sách | Không tự animate (`animatesChanges: false` mặc định) | 0 | – | Đổi 2026-11 |
+| Danh sách khi đổi giờ | **Một** chuyển động: các hàng mờ xuống 0.4 khi đang tải, nội dung mới thay vào một lần rồi sáng lại (`.opacity` + `.animation(.easeInOut(duration: 0.2), value: isRefreshing)`). **Không** animate đổi thứ tự, không cuộn số từng badge | 0.2 s | opacity vẫn được | Đổi 2026-11 (thay cho "N số cùng cuộn trong khi hàng nhảy") |
+| Kéo trên biểu đồ giờ | Highlight cột + `RuleMark` có nhãn giờ · điểm đổi ngay + `.sensoryFeedback(.selection, trigger: hour)` chỉ khi người dùng kéo | 0 | như cũ | Giữ; haptic thay cho animation |
 | Bấm Save | `.symbolEffect(.bounce, value: isSaved)` + `.sensoryFeedback(.impact(weight: .light), trigger: isSaved)` | hệ thống | hệ thống tự giảm | Giữ |
 | Camera bản đồ (chọn pin, deep link) | `setRegion(animated: true)` của MapKit | hệ thống | `animated: false` | Giữ |
 | Nút "Search This Area" | `.transition(.move(edge: .top).combined(with: .opacity))` | 0.2 s | chỉ opacity | Giữ |
 | Đang tải → có nội dung | Bỏ `.redacted`, `.animation(.default, value: isLoading)` | ~0.25 s | đổi ngay | Giữ |
 | Kéo để làm mới | `.refreshable` | hệ thống | hệ thống | Giữ |
-| Gửi report xong | Đóng sheet + `.sensoryFeedback(.success)` | hệ thống | như cũ | Giữ; không toast, không confetti |
+| Gửi report xong | Đóng sheet + `.sensoryFeedback(.success)`; nơi người dùng quay về hiện dấu check `.symbolEffect(.bounce)` (M5) | hệ thống | dấu check hiện tĩnh | Giữ; không toast, không confetti |
 | Paywall | `SubscriptionStoreView` mặc định | hệ thống | hệ thống | Giữ |
 
 **Cấm:** spring nảy trên card hay hàng, parallax, `matchedGeometryEffect` kiểu hero (không có ảnh thì vô nghĩa), pin nhấp nháy hay pulse, shimmer, Lottie, confetti, animation tự chạy lặp (trừ Time-lapse §8.1 khi người dùng bấm Play), animation UI trên 0.35 s (motion graphic §8.1 có giới hạn riêng), `.animation(_:)` không có `value:` (deprecated, animate lan cả view), custom `.navigationTransition`.
@@ -500,11 +529,11 @@ Có làm, nhưng theo một luật: **motion graphic phải vẽ ra dữ liệu 
 
 | # | Motion | Ở đâu | Cách làm | Thời lượng | Reduce Motion | Ưu tiên |
 |---|---|---|---|---|---|---|
-| M1 | **Time-lapse điểm số trên bản đồ** | Map, nút Play ▸ trên toolbar | Chạy qua 12 giờ tới, mỗi giờ khoảng 0.6 s: glyph trên pin đổi số bằng `numericText`, màu tier đổi theo; thanh giờ ở đáy chạy theo. Bấm Pause hoặc chạm map là dừng ở giờ đó, và giờ đó trở thành "When" | khoảng 7 s cho 12 giờ, do người dùng bật | Không chạy tự động; thay bằng `Slider` giờ để kéo tay | P1, điểm khác biệt chính |
-| M2 | **Biểu đồ "ngày của bạn"** | Onboarding bước 1, phía trên 3 dòng giới thiệu | 24 cột `BarMark` mọc lên lần lượt bằng `KeyframeAnimator`, rồi cột giờ tốt nhất đổi sang Meadow kèm nhãn "Best at 3 PM". Dữ liệu là forecast thật của một công viên gần (hoặc của thành phố mặc định) | 1.2 s, chạy **một lần** | Hiện ngay khung hình cuối | P0 |
-| M3 | **Gauge vẽ vào** | Spot Detail, lần đầu mở một điểm | Vòng điểm chạy từ 0 đến giá trị thật, số đếm lên bằng `numericText` | 0.5 s, một lần cho mỗi điểm | Hiện ngay giá trị | P1 |
+| M1 | **Time-lapse điểm số trên bản đồ** | Map, nút Play ▸ trong thanh giờ ở đáy | Chạy qua tối đa 12 giờ tới (Free: không quá ngày mai), mỗi giờ khoảng 0.6 s: pin cross-fade 0.2 s sang số và màu mới; nhãn giờ lớn là điểm neo; sparkline + slider chạy theo. Pause hoặc chạm map là dừng; đó chỉ là *xem trước*. Chạm một pin khi đang xem trước thì giờ đó thành "When" (xem S2) | khoảng 7 s cho 12 giờ, do người dùng bật | Không chạy tự động; thay bằng `Slider` giờ để kéo tay | P1, điểm khác biệt chính |
+| M2 | **Biểu đồ "ngày của bạn"** | Onboarding bước 1, phía trên 3 dòng giới thiệu | 24 cột mọc lên trong một transaction (0.5 s), completion nối sang: cột giờ tốt nhất đổi Meadow, nhãn "Best at 3 PM", `ScoreBadge` thật đếm từ 0 lên điểm đó (0.5 s). Hiện là ngày ví dụ (ghi "Example day"); forecast thật của công viên gần để sau | 1.0 s, chạy **một lần** | Hiện ngay khung hình cuối | P0 |
+| M3 | **Gauge vẽ vào** | Spot Detail, lần đầu mở một điểm | Vòng điểm (không số) và số lớn chạy từ 0 đến giá trị thật, cùng một đường cong `.smooth` | 0.3 s, một lần cho mỗi điểm | Hiện ngay giá trị | Đã làm |
 | M4 | **Đường mặt trời** | Spot Detail, dưới biểu đồ giờ | Đường cong `LineMark` từ bình minh tới hoàng hôn (tính trên máy từ tọa độ và ngày), chấm mặt trời trượt theo giờ đang chọn | theo thao tác kéo, không tự chạy | Chấm nhảy thẳng tới vị trí | P2 (đi cùng D8 bóng râm) |
-| M5 | **Symbol vẽ ra** | Gửi report xong, tạo alert xong | `checkmark.circle` vẽ ra bằng symbol effect *Draw On* (SF Symbols 7). Thiết bị cũ hơn dùng `.symbolEffect(.bounce)` | khoảng 0.4 s | Hệ thống tự giảm | P1 (kiểm lại tên API khi code) |
+| M5 | **Symbol xác nhận** | Gửi report / báo độ đông xong (hàng xác nhận ở Spot Detail), lưu alert xong (chuông trên nút Alert) | `checkmark.circle.fill` / `bell` với `.symbolEffect(.bounce)` (iOS 17). *Draw On* (SF Symbols 7) để sau, cần kiểm tra phiên bản | khoảng 0.4 s | Không bounce | Đã làm (bounce) |
 | M6 | **Widget chuyển số** | Widget | `contentTransition(.numericText())` khi timeline cập nhật (WidgetKit tự animate) | hệ thống | Hệ thống | P1 |
 
 Giới hạn chung:

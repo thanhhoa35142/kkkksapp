@@ -16,10 +16,12 @@ extension APIClient {
     }
 
     /// `GET /v1/spots?ids=` — batch lookup for saved spots (≤ 50 ids).
-    func spots(ids: [UUID], when: Date? = nil) async throws -> SpotFeatureCollection {
+    /// - `from` + `hours` (1…24): adds `properties.scores`, e.g. Best Now's
+    ///   "Good until 6 PM" line. Callers clamp `hours` to the plan (`HourWindow`).
+    func spots(ids: [UUID], when: Date? = nil, from: Date? = nil, hours: Int? = nil) async throws -> SpotFeatureCollection {
         let joined = ids.prefix(50).map(\.uuidString).joined(separator: ",")
         var items = [URLQueryItem(name: "ids", value: joined)]
-        items += Self.timeQuery(when: when, from: nil, hours: nil)
+        items += Self.timeQuery(when: when, from: from, hours: hours)
         return try await get("/v1/spots", query: items, enveloped: false)
     }
 

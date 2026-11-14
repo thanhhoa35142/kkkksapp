@@ -1,7 +1,15 @@
+import Charts
 import SwiftUI
 
 /// S7 · "Why 82?" — what the score is made of, its cap and confidence,
 /// plus a one-tap "is this right?" (POST /v1/scores/feedback).
+///
+/// One stacked bar shows each part's contribution (weight × value), so
+/// Weather at 40 % visibly matters more than Freshness at 5 %. Plain rows
+/// below give the value and the effective weight. Parts without data are
+/// left out; the server then spreads their weight over the others
+/// (backend `scoring.Score`: Σ wᵢ·vᵢ / Σ wᵢ over present parts), and the
+/// rows show those re-normalized weights so the numbers add up.
 struct ScoreBreakdownSheet: View {
     let spotID: UUID
     let point: ForecastPoint
@@ -10,53 +18,76 @@ struct ScoreBreakdownSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var sentVerdict: Int?
 
-    private struct Row: Identifiable {
+    private struct Part: Identifiable {
         let id: String
         let title: String
-        let weight: Int
+        /// Nominal weight from the scoring model (requirements §8).
+        let weight: Double
         let value: Int?
+        let color: Color
+        /// Shown in the footer when missing (Shade isn't shipped yet, so it is silent).
+        let reportsMissing: Bool
     }
 
-    /// Weights from the scoring model (requirements §8); missing data is
-    /// shown as "—", never as 0.
-    private var rows: [Row] {
+    private struct Contribution: Identifiable {
+        let part: Part
+        let share: Double   // effective weight, 0…1
+        let points: Double  // share × value
+        var id: String { part.id }
+    }
+
+    /// Meadow plus neutral tints — no rainbow.
+    private var parts: [Part] {
         let c = point.components
         return [
-            Row(id: "weather", title: String(localized: "Weather"), weight: 40, value: c.weather),
-            Row(id: "crowd", title: String(localized: "Crowd"), weight: 25, value: c.crowd),
-            Row(id: "amenity", title: String(localized: "Amenities"), weight: 20, value: c.amenity),
-            Row(id: "shade", title: String(localized: "Shade"), weight: 10, value: c.shade),
-            Row(id: "fresh", title: String(localized: "Freshness"), weight: 5, value: c.fresh),
+            Part(id: "weather", title: String(localized: "Weather"), weight: 40, value: c.weather,
+                 color: .brand, reportsMissing: true),
+            Part(id: "crowd", title: String(localized: "Crowd"), weight: 25, value: c.crowd,
+                 color: Color.brand.opacity(0.55), reportsMissing: true),
+            Part(id: "amenity", title: String(localized: "Amenities"), weight: 20, value: c.amenity,
+                 color: Color.secondary.opacity(0.55), reportsMissing: true),
+            Part(id: "shade", title: String(localized: "Shade"), weight: 10, value: c.shade,
+                 color: Color.secondary.opacity(0.4), reportsMissing: false),
+            Part(id: "fresh", title: String(localized: "Freshness"), weight: 5, value: c.fresh,
+                 color: Color.secondary.opacity(0.25), reportsMissing: true),
         ]
+    }
+
+    private var contributions: [Contribution] {
+        let present = parts.filter { $0.value != nil }
+        let total = present.reduce(0.0) { $0 + $1.weight }
+        guard total > 0 else { return [] }
+        return present.map { part in
+            let share = part.weight / total
+            return Contribution(part: part, share: share, points: share * Double(part.value ?? 0))
+        }
+    }
+
+    /// Sum before any cap (rounds to the score when uncapped).
+    private var uncapped: Int {
+        Int(contributions.reduce(0.0) { $0 + $1.points }.rounded())
+    }
+
+    private var missingTitles: [String] {
+        parts.filter { $0.value == nil && $0.reportsMissing }.map(\.title)
     }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    ForEach(rows) { row in
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Text(row.title)
-                                Spacer()
-                                Text(row.value.map { "\($0)" } ?? "—")
-                                    .monospacedDigit()
-                                    .foregroundStyle(row.value == nil ? .secondary : .primary)
-                            }
-                            Gauge(value: Double(row.value ?? 0), in: 0...100) { EmptyView() }
-                                .gaugeStyle(.linearCapacity)
-                                .tint(row.value == nil ? Color.secondary.opacity(0.3) : Color.brand)
-                            Text("\(row.weight)% of the score")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .accessibilityElement(children: .combine)
+                    if !contributions.isEmpty {
+                        contributionBar
+                            .padding(.vertical, 6)
+                    }
+                    ForEach(contributions) { item in
+                        row(item)
                     }
                 } header: {
                     Text(Format.dayHour(point.tsHour, in: timeZone))
                 } footer: {
-                    if rows.contains(where: { $0.value == nil }) {
-                        Text("“—” means no data; the other parts count for more.")
+                    if !missingTitles.isEmpty {
+                        Text("No \(missingTitles.formatted(.list(type: .and))) data for this hour, so the other parts count for more.")
                     }
                 }
 
@@ -64,6 +95,10 @@ struct ScoreBreakdownSheet: View {
                     Section {
                         Label(capText(cap), systemImage: CapStyle.symbol(cap) ?? "exclamationmark.triangle")
                             .symbolRenderingMode(.hierarchical)
+                    } footer: {
+                        if uncapped > point.score {
+                            Text("Without the cap the parts add up to \(uncapped).")
+                        }
                     }
                 }
 
@@ -76,16 +111,15 @@ struct ScoreBreakdownSheet: View {
 
                 Section("Is this score right?") {
                     if sentVerdict != nil {
-                        Text("Thanks — this helps tune the score.")
+                        Text("Thanks. This helps tune the score.")
                             .foregroundStyle(.secondary)
                     } else {
                         HStack(spacing: 12) {
-                            verdictButton(-1, "Too high", "hand.thumbsdown")
-                            verdictButton(0, "About right", "equal")
-                            verdictButton(1, "Too low", "hand.thumbsup")
+                            verdictButton(-1, "Too high")
+                            verdictButton(0, "About right")
+                            verdictButton(1, "Too low")
                         }
                         .buttonStyle(.bordered)
-                        .labelStyle(.titleAndIcon)
                     }
                 }
             }
@@ -102,8 +136,54 @@ struct ScoreBreakdownSheet: View {
         .presentationDetents([.medium, .large])
     }
 
+    /// One flat stacked bar on a 0–100 track; the rows carry the numbers,
+    /// so VoiceOver skips the bar.
+    private var contributionBar: some View {
+        let used = contributions.reduce(0.0) { $0 + $1.points }
+        return Chart {
+            ForEach(contributions) { item in
+                BarMark(x: .value("Points", item.points), y: .value("Score", "score"))
+                    .foregroundStyle(item.part.color)
+            }
+            if used < 100 {
+                BarMark(x: .value("Points", 100 - used), y: .value("Score", "score"))
+                    .foregroundStyle(Color.secondary.opacity(0.1))
+            }
+        }
+        .chartXScale(domain: 0...100)
+        .chartXAxis(.hidden)
+        .chartYAxis(.hidden)
+        .chartLegend(.hidden)
+        .frame(height: 16)
+        .accessibilityHidden(true)
+    }
+
+    private func row(_ item: Contribution) -> some View {
+        let value = item.part.value ?? 0
+        let percent = Int((item.share * 100).rounded())
+        let points = Int(item.points.rounded())
+        return HStack(spacing: 10) {
+            Circle()
+                .fill(item.part.color)
+                .frame(width: 10, height: 10)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.part.title)
+                Text("\(percent)% of the score · adds \(points)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            Spacer()
+            Text(value, format: .number)
+                .monospacedDigit()
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("\(item.part.title): \(value) out of 100, \(percent)% of the score, adds \(points) points"))
+    }
+
     /// -1: score feels too high, +1: too low (API verdict semantics).
-    private func verdictButton(_ verdict: Int, _ title: LocalizedStringKey, _ symbol: String) -> some View {
+    private func verdictButton(_ verdict: Int, _ title: LocalizedStringKey) -> some View {
         Button {
             sentVerdict = verdict
             Task {
@@ -112,7 +192,7 @@ struct ScoreBreakdownSheet: View {
                     tsHour: point.tsHour, verdict: verdict)
             }
         } label: {
-            Label(title, systemImage: symbol)
+            Text(title)
                 .frame(maxWidth: .infinity)
         }
     }

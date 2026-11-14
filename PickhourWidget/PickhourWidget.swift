@@ -350,6 +350,10 @@ struct WidgetScoreRing: View {
     let score: Int?
     let diameter: CGFloat
 
+    /// Follows Dynamic Type a little; widget space is fixed, so clamp it.
+    @ScaledMetric(relativeTo: .subheadline) private var typeScale: CGFloat = 1
+    private var size: CGFloat { diameter * min(max(typeScale, 1), 1.2) }
+
     private var color: Color {
         guard let score else { return .secondary }
         switch score {
@@ -360,7 +364,7 @@ struct WidgetScoreRing: View {
     }
 
     var body: some View {
-        let line = max(3, diameter / 11)
+        let line = max(3, size / 11)
         ZStack {
             Circle().stroke(Color.secondary.opacity(0.2), lineWidth: line)
             if let score {
@@ -371,10 +375,12 @@ struct WidgetScoreRing: View {
                     .widgetAccentable()
             }
             Text(score.map(String.init) ?? "–")
-                .font(.system(size: diameter * 0.36, weight: .semibold, design: .rounded))
+                .font(.system(size: size * 0.36, weight: .semibold, design: .rounded))
                 .monospacedDigit()
+                .minimumScaleFactor(0.7)
+                .lineLimit(1)
         }
-        .frame(width: diameter, height: diameter)
+        .frame(width: size, height: size)
         .accessibilityLabel(Text(score.map { String(localized: "Score \($0)") } ?? String(localized: "No score")))
     }
 }
