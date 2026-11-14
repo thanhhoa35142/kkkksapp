@@ -4,6 +4,13 @@ import SwiftUI
 /// The score ring is the row's only accent — no icon before the text.
 struct SpotRow: View {
     let spot: SpotSummary
+    /// "Good until 6 PM" / "Better at 4 PM · 88" (Best Now). nil = no line.
+    var timeLine: String? = nil
+    /// Meadow for a concrete good hour, secondary for a neutral note.
+    var timeLineIsPositive = true
+    var badgeDiameter: CGFloat = 44
+    /// Best Now's first result uses its own id so layout tests can tell it apart.
+    var identifier = "spotRow"
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -23,12 +30,12 @@ struct SpotRow: View {
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("spotRow")
+        .accessibilityIdentifier(identifier)
         .spotDraggable(spot)
     }
 
     private var badge: some View {
-        ScoreBadge(score: spot.score?.score, capReason: spot.score?.capReason)
+        ScoreBadge(score: spot.score?.score, capReason: spot.score?.capReason, diameter: badgeDiameter)
     }
 
     private var text: some View {
@@ -43,6 +50,13 @@ struct SpotRow: View {
                 Text(line)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            if let timeLine {
+                Text(timeLine)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(timeLineIsPositive ? Color.brand : Color.secondary)
+                    .monospacedDigit()
                     .lineLimit(1)
             }
         }

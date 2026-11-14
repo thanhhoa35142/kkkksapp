@@ -133,20 +133,6 @@ struct CityPickerList: View {
 
     var body: some View {
         List {
-            if app.packs.isEmpty {
-                if let error = app.packsError {
-                    ContentUnavailableView {
-                        Label("Can't load cities", systemImage: "wifi.slash")
-                    } description: {
-                        Text(error)
-                    } actions: {
-                        Button("Try Again") { Task { await app.loadPacksIfNeeded() } }
-                    }
-                } else {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                }
-            }
             ForEach(grouped, id: \.country) { group in
                 Section(group.country) {
                     ForEach(group.packs) { pack in
@@ -168,6 +154,24 @@ struct CityPickerList: View {
             }
         }
         .groupedList()
+        // Loading / failed: full-screen system states over the empty list.
+        .overlay {
+            if app.packs.isEmpty {
+                if let error = app.packsError {
+                    ContentUnavailableView {
+                        Label("Can't load cities", systemImage: "wifi.slash")
+                    } description: {
+                        Text(error)
+                    } actions: {
+                        Button("Try Again") { Task { await app.loadPacksIfNeeded() } }
+                    }
+                } else {
+                    ProgressView()
+                }
+            } else if grouped.isEmpty {
+                ContentUnavailableView.search(text: query)
+            }
+        }
         .navigationTitle("Choose a City")
         .inlineTitle()
         .searchable(text: $query, prompt: "City or country")

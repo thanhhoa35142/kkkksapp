@@ -15,6 +15,9 @@ struct AlertEditorSheet: View {
     var existing: AlertRule?
     /// New area rule: centre of the area (already coarse).
     var areaCenter: AreaPoint?
+    /// Called after a successful save — the caller confirms it in place
+    /// (M5: Spot Detail bounces its bell), since this sheet closes.
+    var onSaved: (() -> Void)?
 
     static let radiusOptions = [1_000, 3_000, 5_000, 10_000]
 
@@ -210,6 +213,7 @@ struct AlertEditorSheet: View {
             app.track(existing == nil ? "alert_created" : "alert_updated",
                       ["target": .string(isArea ? "area" : "spot")])
             saved += 1
+            onSaved?()
             dismiss()
         case .needsPlus:
             showPaywall = true
@@ -232,24 +236,47 @@ extension AlertEditorSheet {
 }
 
 /// Saved › Alerts row: "Vondelpark" / "Weekends · 10:00 AM–6:00 PM · 75+".
+/// Two separate controls, the native way: the text is a button that opens
+/// the editor (with a chevron as the affordance), the switch pauses or
+/// resumes the alert. No row-wide tap gesture fighting the toggle.
 struct AlertRow: View {
     let rule: AlertRule
     let name: String
+    var onEdit: () -> Void = {}
 
     @Environment(AppState.self) private var app
 
     var body: some View {
-        Toggle(isOn: Binding(
-            get: { rule.enabled },
-            set: { value in Task { await app.alerts.setEnabled(rule, value) } }
-        )) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(name).font(.headline)
-                Text(summary)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
+        HStack(spacing: 12) {
+            Button(action: onEdit) {
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(name)
+                            .font(.headline)
+                            .foregroundStyle(Color.primary)
+                        Text(summary)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.forward")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
+                }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityHint(Text("Edit alert"))
+
+            Toggle(isOn: Binding(
+                get: { rule.enabled },
+                set: { value in Task { await app.alerts.setEnabled(rule, value) } }
+            )) {
+                Text(name)
+            }
+            .labelsHidden()
         }
     }
 

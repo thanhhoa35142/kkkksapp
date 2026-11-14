@@ -25,13 +25,14 @@ enum ReasonLocalizer {
         case "weather.cloudy":
             return String(localized: "Overcast")
 
-        // Crowd
+        // Crowd — time-neutral: the viewed hour may be later today or
+        // another day, and crowd levels are an estimate (UI_SPEC §16).
         case "crowd.low":
-            return String(localized: "Quiet right now")
+            return String(localized: "Usually quiet at this hour")
         case "crowd.moderate":
             return String(localized: "Some people around")
         case "crowd.high":
-            return String(localized: "Busy right now")
+            return String(localized: "Usually busy at this hour")
 
         // Amenities / freshness
         case "amenity.well_equipped":
@@ -41,15 +42,15 @@ enum ReasonLocalizer {
 
         // Hard caps — these explain a low score, order matters in UI
         case "cap.rain":
-            return String(localized: "Rain expected — score capped")
+            return String(localized: "Rain expected, score capped")
         case "cap.heat":
-            return String(localized: "Extreme heat — score capped")
+            return String(localized: "Extreme heat, score capped")
         case "cap.cold":
-            return String(localized: "Freezing — score capped")
+            return String(localized: "Freezing, score capped")
         case "cap.dark":
-            return String(localized: "After dark — score capped")
+            return String(localized: "After dark, score capped")
         case "cap.twilight":
-            return String(localized: "Dusk or dawn — score capped")
+            return String(localized: "Dusk or dawn, score capped")
 
         default:
             // Unknown codes are dropped by callers via `isKnown` — never shown raw.

@@ -20,7 +20,7 @@ struct RegularRoot: View {
                     .inspector(isPresented: inspectorBinding(enabled: wide)) {
                         if let id = app.selectedSpotID {
                             NavigationStack {
-                                SpotDetailView(spotID: id, showsHeaderMap: false)
+                                SpotDetailView(spotID: id, context: .inspector)
                                     .toolbar {
                                         ToolbarItem(placement: .cancellationAction) {
                                             Button("Close") { app.selectedSpotID = nil }
@@ -60,11 +60,7 @@ private struct ExploreSidebar: View {
         @Bindable var app = app
         NavigationStack {
             List(selection: $app.selectedSpotID) {
-                Section {
-                    BestNowRows(model: bestNow, rowStyle: .select)
-                } header: {
-                    Text("Best Now · \(app.when.label)")
-                }
+                BestNowRows(model: bestNow, rowStyle: .select, showCityPicker: $showCityPicker)
                 if !favorites.isEmpty {
                     WeekPlanSection(favorites: favorites, plan: plan, rowStyle: .select)
                     Section("Saved") {
@@ -98,7 +94,7 @@ private struct ExploreSidebar: View {
                 #endif
             }
             .navigationDestination(item: pushBinding) { id in
-                SpotDetailView(spotID: id, showsHeaderMap: false)
+                SpotDetailView(spotID: id, context: .inspector)
             }
             .sheet(isPresented: $showSettings) {
                 NavigationStack {

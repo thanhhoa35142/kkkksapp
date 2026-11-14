@@ -49,7 +49,9 @@ struct WeekStrip: View {
                 .foregroundStyle(isSelected ? Color.primary : Color.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-            ScoreBadge(score: day.best?.score, diameter: 32)
+            // 36 pt (≈ 13 pt number), grows a little with Dynamic Type but
+            // stays inside a 1/7 column on a 375 pt phone.
+            ScoreBadge(score: day.best?.score, diameter: 36, maxTypeScale: 1.15)
             Group {
                 if day.locked {
                     Image(systemName: "lock.fill")

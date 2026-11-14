@@ -208,7 +208,9 @@ enum UITestFixtures {
         let s = score(spot, at: date)
         return ["tsHour": iso(date), "score": s.score,
                 "components": ["weather": min(100, s.score + 4), "crowd": 70, "amenity": 55, "fresh": 80],
-                "capReason": nullable(s.cap), "reasons": reasons(s.cap), "confidence": 2] as JSON
+                "capReason": nullable(s.cap), "reasons": reasons(s.cap), "confidence": 2,
+                "weather": ["tempC": 21.0, "feelsLikeC": 20.0, "precipProb": s.cap == "rain" ? 80 : 10,
+                            "windKmh": 12.0, "uv": 4.0, "cloud": 30]] as JSON
     }
 
     private static func alertRule() -> [String: Any] {

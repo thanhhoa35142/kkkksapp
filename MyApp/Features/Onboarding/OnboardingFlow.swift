@@ -1,13 +1,18 @@
 import SwiftUI
 
-/// S0 · Onboarding — Apple-style Welcome, not a carousel: three pushed
-/// steps, ≤ 3 taps to content, no notification prompt, no paywall.
+/// S0 · Onboarding — Apple-style Welcome, not a carousel: two pushed
+/// steps (Welcome → Where), at most 2 taps to content, no notification
+/// prompt, no paywall. Choosing a place finishes onboarding.
+///
+/// There is no "Who's coming?" step: the backend doesn't rank by
+/// companions yet, so asking would promise something the app doesn't do.
+/// `Companion` / `AppState.companions` stay for when it does.
 struct OnboardingFlow: View {
     @Environment(AppState.self) private var app
     @Environment(\.dismiss) private var dismiss
     @State private var path: [Step] = []
 
-    enum Step: Hashable { case place, companions, city }
+    enum Step: Hashable { case place, city }
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -16,18 +21,17 @@ struct OnboardingFlow: View {
                     switch step {
                     case .place:
                         PlaceStep(onCity: { path.append(.city) },
-                                  onDone: { path.append(.companions) })
+                                  onDone: { finish(place: "location") })
                     case .city:
-                        CityPickerList { path.append(.companions) }
-                    case .companions:
-                        CompanionsStep(onDone: finish)
+                        CityPickerList { finish(place: "city") }
                     }
                 }
         }
     }
 
-    private func finish(skipped: Bool) {
-        app.track("onboarding_completed", ["skippedWho": .bool(skipped)])
+    /// `place`: "location" | "city" — how the first place was chosen.
+    private func finish(place: String) {
+        app.track("onboarding_completed", ["place": .string(place)])
         dismiss()
     }
 }
@@ -97,9 +101,11 @@ private struct WelcomeStep: View {
     }
 }
 
-/// M2 motion graphic: 24 bars grow once, then the best hour turns Meadow
-/// (UI_SPEC §8.1). An illustrative day — labelled as such. Reduce Motion
-/// shows the final frame.
+/// M2 motion graphic: the bars of an example day grow once, then the best
+/// hour turns Meadow and the app's own `ScoreBadge` counts up to its score —
+/// the same ring the user meets on every row (UI_SPEC §8.1). One shot,
+/// 1.0 s total, chained with `withAnimation` completions (no timed sleep).
+/// Labelled as an example. Reduce Motion shows the final frame.
 private struct DayPreview: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var grown = false
@@ -108,24 +114,33 @@ private struct DayPreview: View {
     private static let values: [Double] = [20, 18, 15, 12, 10, 12, 20, 32, 45, 55, 62, 68,
                                            72, 76, 82, 86, 80, 70, 58, 45, 35, 28, 24, 22]
     private static let bestIndex = 15
+    private static var bestScore: Int { Int(values[bestIndex]) }
+
+    private static var bestHourLabel: String {
+        let hour = Calendar.current.date(bySettingHour: bestIndex, minute: 0, second: 0, of: .now) ?? .now
+        return Format.hour(hour)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .bottom, spacing: 3) {
-                ForEach(Self.values.indices, id: \.self) { index in
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(index == Self.bestIndex && revealed ? Color.brand : Color.secondary.opacity(0.25))
-                        .frame(height: grown ? Self.values[index] : 2)
-                        .animation(reduceMotion ? nil : .easeOut(duration: 0.4).delay(Double(index) * 0.03),
-                                   value: grown)
+            HStack(alignment: .bottom, spacing: 16) {
+                HStack(alignment: .bottom, spacing: 3) {
+                    ForEach(Self.values.indices, id: \.self) { index in
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(index == Self.bestIndex && revealed ? Color.brand : Color.secondary.opacity(0.25))
+                            .frame(height: grown ? Self.values[index] : 2)
+                    }
                 }
+                .frame(height: 90, alignment: .bottom)
+                ScoreBadge(score: revealed ? Self.bestScore : 0, diameter: 56,
+                           animatesChanges: true, motionDuration: 0.5, maxTypeScale: 1.2)
+                    .opacity(grown ? 1 : 0)
             }
-            .frame(height: 90, alignment: .bottom)
             HStack {
                 Text("Example day")
                 Spacer()
                 if revealed {
-                    Text("Best at 3 PM")
+                    Text("Best at \(Self.bestHourLabel)")
                         .foregroundStyle(Color.brand)
                         .transition(.opacity)
                 }
@@ -134,16 +149,19 @@ private struct DayPreview: View {
             .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Example day: the score peaks at 3 PM.")
+        .accessibilityLabel(Text("Example day: the score peaks at \(Self.bestScore) at \(Self.bestHourLabel)."))
         .task {
+            guard !grown else { return }
             if reduceMotion {
                 grown = true
                 revealed = true
                 return
             }
-            grown = true
-            do { try await Task.sleep(for: .milliseconds(1100)) } catch { return }
-            withAnimation(.easeInOut(duration: 0.25)) { revealed = true }
+            withAnimation(.easeOut(duration: 0.5)) {
+                grown = true
+            } completion: {
+                withAnimation(.easeInOut(duration: 0.5)) { revealed = true }
+            }
         }
     }
 }
@@ -201,70 +219,5 @@ private struct PlaceStep: View {
             .padding(.bottom, 12)
         }
         .inlineTitle()
-    }
-}
-
-// MARK: - Step 3 · Who
-
-private struct CompanionsStep: View {
-    var onDone: (_ skipped: Bool) -> Void
-
-    @Environment(AppState.self) private var app
-    @State private var selected: Set<Companion> = []
-
-    var body: some View {
-        List {
-            Section {
-                ForEach(Companion.allCases) { companion in
-                    Button {
-                        if selected.contains(companion) { selected.remove(companion) }
-                        else { selected.insert(companion) }
-                    } label: {
-                        HStack {
-                            Text(companion.title)
-                                .foregroundStyle(Color.primary)
-                            Spacer()
-                            if selected.contains(companion) {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(Color.brand)
-                            }
-                        }
-                    }
-                    .accessibilityAddTraits(selected.contains(companion) ? .isSelected : [])
-                }
-            } header: {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Who's coming along?")
-                        .font(.largeTitle.bold())
-                        .foregroundStyle(Color.primary)
-                        .textCase(nil)
-                    Text("We'll favor spots that suit them.")
-                        .font(.body)
-                        .textCase(nil)
-                }
-                .padding(.bottom, 8)
-            }
-        }
-        .groupedList()
-        .inlineTitle()
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Skip") { onDone(true) }
-            }
-        }
-        .safeAreaInset(edge: .bottom) {
-            Button {
-                app.setCompanions(selected)
-                onDone(false)
-            } label: {
-                Text("Start Exploring").frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .frame(maxWidth: 520)
-            .padding(.horizontal, 24)
-            .padding(.bottom, 12)
-        }
-        .onAppear { selected = app.companions }
     }
 }

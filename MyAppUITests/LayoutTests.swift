@@ -41,14 +41,17 @@ final class LayoutTests: XCTestCase {
     func testBestNow() throws {
         for size in TextSize.allCases {
             let app = launch(size)
+            // Row 1 is "the answer" in its own section (id spotRow.top); the
+            // even-gap check covers the uniform rows below it.
+            let top = app.descendants(matching: .any).matching(identifier: "spotRow.top").firstMatch
             let rows = app.descendants(matching: .any).matching(identifier: "spotRow")
-            XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 10), "[\(size)] Best Now rows never loaded")
+            XCTAssertTrue(top.waitForExistence(timeout: 10), "[\(size)] Best Now top pick never loaded")
 
             Layout.assertNothingOffScreenHorizontally(app, "\(size) Best Now")
-            Layout.assertNoOverlap(Layout.visible(rows, in: app), "\(size) Best Now rows")
+            Layout.assertNoOverlap([top] + Layout.visible(rows, in: app), "\(size) Best Now rows")
             Layout.assertEvenVerticalGaps(Layout.visible(rows, in: app), tolerance: 6, "\(size) Best Now rows")
             // No big empty band above the first result.
-            let first = rows.firstMatch.frame
+            let first = top.frame
             XCTAssertLessThan(first.minY, Layout.window(app).height * 0.45,
                               "[\(size)] first result starts too low (\(first.minY)) — empty space above the list")
             Layout.audit(app, "\(size) Best Now")
@@ -59,25 +62,31 @@ final class LayoutTests: XCTestCase {
     func testSpotDetail() throws {
         for size in TextSize.allCases {
             let app = launch(size)
-            let row = app.descendants(matching: .any).matching(identifier: "spotRow").element(boundBy: 1)
+            // The long-named fixture is the first plain row (row 2 overall).
+            let row = app.descendants(matching: .any).matching(identifier: "spotRow").element(boundBy: 0)
             XCTAssertTrue(row.waitForExistence(timeout: 10))
             row.tap()
 
             let directions = app.buttons["spotAction.directions"]
             XCTAssertTrue(directions.waitForExistence(timeout: 10), "[\(size)] Spot Detail didn't open")
-            let actions = ["spotAction.directions", "spotAction.alert", "spotAction.report"].map { app.buttons[$0] }
+            let alert = app.buttons["spotAction.alert"]
+            let actions = [directions, alert]
 
             if size.isAccessibility {
                 // Stacked: same width, one under the other.
                 Layout.assertEqualWidths(actions, tolerance: 1.5, "\(size) action buttons (stacked)")
             } else {
-                Layout.assertEqualWidths(actions, tolerance: 1.5, "\(size) action buttons")
-                Layout.assertEvenHorizontalGaps(actions, tolerance: 1.5, "\(size) action buttons")
+                // Directions is the one prominent action: clearly wider than Alert.
+                XCTAssertGreaterThan(directions.frame.width, alert.frame.width * 1.3,
+                                     "[\(size)] Directions should dominate the action row")
                 // Thumb reach: the main action is on screen without scrolling,
                 // and not crammed into the top bar area.
                 Layout.assertInThumbReach(directions, app, "\(size) Directions")
             }
             Layout.assertNoOverlap(actions, "\(size) action buttons")
+            // Report lives in About only (no duplicate in the action row).
+            XCTAssertLessThanOrEqual(app.buttons.matching(identifier: "spotAction.report").count, 1,
+                                     "[\(size)] Report shown twice")
 
             // Week strip: 7 equal columns, evenly spaced, inside the screen.
             let strip = (0..<7).map { app.buttons["weekStrip.day.\($0)"] }

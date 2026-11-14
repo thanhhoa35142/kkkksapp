@@ -42,6 +42,19 @@ final class MapModel {
         features.map { $0.properties.scores?.count ?? 0 }.max() ?? 0
     }
 
+    /// Average score of the loaded (visible) spots per hour offset — the
+    /// scrubber's sparkline. nil where no spot has a score that hour.
+    var hourlyAverages: [Int?] {
+        (0..<hoursAvailable).map { index in
+            let values = features.compactMap { f -> Int? in
+                guard let scores = f.properties.scores, index < scores.count else { return nil }
+                return scores[index].score
+            }
+            guard !values.isEmpty else { return nil }
+            return Int((Double(values.reduce(0, +)) / Double(values.count)).rounded())
+        }
+    }
+
     var timelapseHour: Date? {
         guard let hourOffset, let loadedFrom else { return nil }
         return loadedFrom.addingTimeInterval(Double(hourOffset) * 3600)
@@ -87,12 +100,15 @@ final class MapModel {
         isLoading = true
         defer { isLoading = false }
         let from = when.resolved
+        // Free: the time-lapse never runs past tomorrow (spec §15), so the
+        // scrubbed hour can always become the app's "When".
+        let hours = HourWindow.hours(from: from, isPlus: app.isPlus, maxHours: Self.timelapseHours)
         do {
             let collection = try await AppConfig.apiClient.spots(
                 bbox: GeoMath.bbox(for: region, padding: 0.01),
                 when: when.apiDate,
                 from: from,
-                hours: Self.timelapseHours,
+                hours: max(hours, 1),
                 includeArea: span < Self.outlineSpan,
                 filters: app.filters)
             features = collection.features
@@ -134,6 +150,12 @@ final class MapModel {
         playTask?.cancel()
         playTask = nil
         isPlaying = false
+    }
+
+    /// Hour being previewed, or nil at the start (= the app's "When").
+    var previewHour: Date? {
+        guard let hourOffset, hourOffset > 0 else { return nil }
+        return timelapseHour
     }
 
     /// Ends the time-lapse and goes back to the selected hour.

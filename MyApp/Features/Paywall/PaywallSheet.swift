@@ -44,6 +44,14 @@ struct PaywallSheet: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                // Opened from a locked day: that day's real best hour, which
+                // Free already sees in the week strip — no made-up numbers.
+                if reason == .forecast, let teaser = app.paywallTeaser {
+                    Text(teaser.text)
+                        .font(.headline)
+                        .monospacedDigit()
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 PlanComparison()
                 Text("Cancel anytime in Settings. Works on iPhone, iPad and Mac.")
                     .font(.footnote)

@@ -77,6 +77,9 @@ struct WeekPlanSection: View {
 
     @Environment(AppState.self) private var app
     @State private var digest = WeekendDigestModel()
+    #if os(iOS)
+    @State private var calendarWindow: PlanWindow?
+    #endif
 
     private var spotIDs: [UUID] { favorites.map(\.spotID) }
 
@@ -140,6 +143,16 @@ struct WeekPlanSection: View {
             await digest.load()
             await digest.sync(spotIDs: spotIDs)
         }
+        // On one stable row (plan rows come and go): the system event editor.
+        #if os(iOS)
+        .sheet(item: $calendarWindow) { window in
+            CalendarEventSheet(
+                title: String(localized: "Picnic at \(window.spotName)"),
+                start: window.start, end: window.end, timeZone: window.timeZone,
+                url: mapsURL(for: window)) { calendarWindow = nil }
+                .ignoresSafeArea()
+        }
+        #endif
     }
 
     @ViewBuilder
@@ -148,10 +161,41 @@ struct WeekPlanSection: View {
         case .push:
             NavigationLink(value: window.spotID) { PlanWindowRow(window: window) }
                 .simultaneousGesture(TapGesture().onEnded { app.track("plan_opened") })
+                .contextMenu { planActions(window) }
         case .select:
             PlanWindowRow(window: window)
                 .tag(window.spotID)
+                .contextMenu { planActions(window) }
         }
+    }
+
+    /// Long-press / right-click: share the window as a line of text
+    /// ("Sat 2 PM–6 PM · Vondelpark · 84") with the Apple Maps link, and on
+    /// iOS add it to Calendar through the system event editor.
+    @ViewBuilder
+    private func planActions(_ window: PlanWindow) -> some View {
+        let text = window.shareText
+        if let url = SpotLink.shareURL(spotID: window.spotID) ?? mapsURL(for: window) {
+            ShareLink(item: url, subject: Text(window.spotName), message: Text(text)) {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
+        } else {
+            ShareLink(item: text) {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
+        }
+        #if os(iOS)
+        Button("Add to Calendar", systemImage: "calendar.badge.plus") {
+            calendarWindow = window
+            app.track("plan_calendar")
+        }
+        #endif
+    }
+
+    private func mapsURL(for window: PlanWindow) -> URL? {
+        guard let favorite = favorites.first(where: { $0.spotID == window.spotID }),
+              let latitude = favorite.latitude, let longitude = favorite.longitude else { return nil }
+        return SpotLink.mapsURL(name: window.spotName, latitude: latitude, longitude: longitude)
     }
 }
 
@@ -191,5 +235,15 @@ struct PlanWindowRow: View {
         var style = Date.FormatStyle.dateTime.weekday(.wide)
         style.timeZone = window.timeZone
         return window.start.formatted(style)
+    }
+}
+
+extension PlanWindow {
+    /// "Sat 2 PM–6 PM · Vondelpark · 84" in the spot's time zone.
+    var shareText: String {
+        var weekday = Date.FormatStyle.dateTime.weekday(.abbreviated)
+        weekday.timeZone = timeZone
+        let range = "\(Format.hour(start, in: timeZone))–\(Format.hour(end, in: timeZone))"
+        return "\(start.formatted(weekday)) \(range) · \(spotName) · \(score)"
     }
 }
