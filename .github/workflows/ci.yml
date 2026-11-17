@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [main]
 
+# A new commit on the same branch / PR cancels the run still going for the
+# previous one: only the latest commit's result matters, and macOS minutes
+# are expensive (x10 on a private repo).
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: macos-15
