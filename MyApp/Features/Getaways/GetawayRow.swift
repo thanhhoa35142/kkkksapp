@@ -11,32 +11,38 @@ struct GetawayRow: View {
     var isHome = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.headline)
-                .lineLimit(2)
-            Text(windowLine)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
-            if GetawayRules.showsLocalTimeCaption(city) {
-                Text("local time")
-                    .font(.caption)
+        // Three groups — when, the city's weather, the spot — with more
+        // room between groups than within one.
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.headline)
+                    .lineLimit(2)
+                Text(windowLine)
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                if GetawayRules.showsLocalTimeCaption(city) {
+                    Text("local time")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
             weatherLine
-            if let spot = city.topSpot {
-                spotLine(spot)
-            }
-            if let reasons = reasonsLine {
-                Text(reasons)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            if let meta = metaLine {
-                Text(meta)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 4) {
+                if let spot = city.topSpot {
+                    spotLine(spot)
+                }
+                if let reasons = reasonsLine {
+                    Text(reasons)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                if let meta = metaLine {
+                    Text(meta)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -44,6 +50,9 @@ struct GetawayRow: View {
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("getawayRow")
     }
+
+    /// Width of the weather icon and the spot's ring, so the two texts align.
+    private static let leadingColumn: CGFloat = 32
 
     private var title: String {
         let flag = GetawayRules.flag(for: city.country)
@@ -59,14 +68,15 @@ struct GetawayRow: View {
     /// day, "Weather Sat 71 · Sun 86" for a range. It is not a total score,
     /// so it gets no ring.
     private var weatherLine: some View {
-        Label {
+        HStack(spacing: 8) {
+            Image(systemName: "cloud.sun")
+                .frame(width: Self.leadingColumn)
+                .accessibilityHidden(true)
             if let days = GetawayRules.dayScoresLine(city) {
                 Text("Weather \(days)")
             } else {
                 Text("Weather \(city.weatherScore)")
             }
-        } icon: {
-            Image(systemName: "cloud.sun")
         }
         .font(.subheadline)
         .foregroundStyle(.secondary)
@@ -77,7 +87,7 @@ struct GetawayRow: View {
     private func spotLine(_ spot: GetawayTopSpot) -> some View {
         HStack(spacing: 8) {
             if let score = spot.score {
-                ScoreBadge(score: score, diameter: 32)
+                ScoreBadge(score: score, diameter: Self.leadingColumn)
             }
             Text(spot.name)
                 .font(.subheadline)
