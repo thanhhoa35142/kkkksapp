@@ -38,6 +38,7 @@ jobs:
               -only-testing:MyAppUITests/LayoutTests/testBestNowAtNight
               -only-testing:MyAppUITests/LayoutTests/testTabBarInThumbZone
               -only-testing:MyAppUITests/MyAppUITests
+              -only-testing:MyAppUITests/PhoneScreenshotTests
           - group: b
             select: >-
               -skip-testing:MyAppUITests/LayoutTests/testOnboardingPrimaryButtonsAtTheBottom
@@ -46,6 +47,7 @@ jobs:
               -skip-testing:MyAppUITests/LayoutTests/testTabBarInThumbZone
               -skip-testing:MyAppUITests/MyAppUITests
               -skip-testing:MyAppUITests/MacScreenshotTests
+              -skip-testing:MyAppUITests/PhoneScreenshotTests
     steps:
       - uses: actions/checkout@v4
 
@@ -71,6 +73,25 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             test
+
+      # Group a: the iPhone screens (PhoneScreenshotTests, named "NN-...").
+      - name: Export screenshots
+        if: ${{ !cancelled() && matrix.group == 'a' && hashFiles('build/ios.xcresult/Info.plist') != '' }}
+        run: |
+          mkdir -p build/ios-all
+          xcrun xcresulttool export attachments \
+            --path build/ios.xcresult --output-path build/ios-all
+          python3 scripts/rename-screenshots.py build/ios-all \
+            || echo "rename failed: keeping the exported file names"
+
+      - name: Upload screenshots
+        if: ${{ !cancelled() && matrix.group == 'a' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-screenshots
+          path: build/ios-all/[0-9][0-9]-*.png
+          if-no-files-found: warn
+          retention-days: 14
 
       # A screenshot per failure (LayoutTests.record), for review without a Mac.
       - name: Export failure screenshots
