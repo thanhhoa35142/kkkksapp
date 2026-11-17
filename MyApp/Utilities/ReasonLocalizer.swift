@@ -40,17 +40,23 @@ enum ReasonLocalizer {
         case "fresh.recent":
             return String(localized: "Recently verified")
 
+        // Getaways (best weather across cities)
+        case "getaway.dry_day":
+            return String(localized: "Dry all day")
+        case "getaway.long_window":
+            return String(localized: "\(hours(params)) hours of good weather")
+
         // Hard caps — these explain a low score, order matters in UI
         case "cap.rain":
-            return String(localized: "Rain expected, score capped")
+            return String(localized: "Rain likely")
         case "cap.heat":
-            return String(localized: "Extreme heat, score capped")
+            return String(localized: "Too hot to sit out")
         case "cap.cold":
-            return String(localized: "Freezing, score capped")
+            return String(localized: "Too cold for a picnic")
         case "cap.dark":
-            return String(localized: "After dark, score capped")
+            return String(localized: "Too dark for a picnic")
         case "cap.twilight":
-            return String(localized: "Dusk or dawn, score capped")
+            return String(localized: "The sun is low")
 
         default:
             // Unknown codes are dropped by callers via `isKnown` — never shown raw.
@@ -74,6 +80,8 @@ enum ReasonLocalizer {
         case "crowd.low", "crowd.moderate", "crowd.high": "person.2.fill"
         case "amenity.well_equipped": "toilet.fill"
         case "fresh.recent": "checkmark.seal.fill"
+        case "getaway.dry_day": "sun.max"
+        case "getaway.long_window": "clock.fill"
         case "cap.rain": "cloud.heavyrain.fill"
         case "cap.heat": "thermometer.sun.fill"
         case "cap.cold": "snowflake"
@@ -94,6 +102,12 @@ enum ReasonLocalizer {
     private static func temp(_ params: [String: JSONValue]?) -> String {
         guard let t = param(params, "temp") else { return "--" }
         return Format.temperature(celsius: t)
+    }
+
+    /// `hours` is a whole number of good hours (`getaway.long_window`).
+    private static func hours(_ params: [String: JSONValue]?) -> String {
+        guard let h = param(params, "hours") else { return "--" }
+        return String(Int(h.rounded()))
     }
 
     /// `prob` is a 0–100 percentage already.

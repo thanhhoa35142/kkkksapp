@@ -87,7 +87,7 @@ struct ScoreBreakdownSheet: View {
                     Text(Format.dayHour(point.tsHour, in: timeZone))
                 } footer: {
                     if !missingTitles.isEmpty {
-                        Text("No \(missingTitles.formatted(.list(type: .and))) data for this hour, so the other parts count for more.")
+                        Text("Not known yet for this hour: \(missingTitles.formatted(.list(type: .and))). The rest counts for more.")
                     }
                 }
 
@@ -97,7 +97,7 @@ struct ScoreBreakdownSheet: View {
                             .symbolRenderingMode(.hierarchical)
                     } footer: {
                         if uncapped > point.score {
-                            Text("Without the cap the parts add up to \(uncapped).")
+                            Text("Otherwise this hour would score about \(uncapped).")
                         }
                     }
                 }
@@ -105,7 +105,7 @@ struct ScoreBreakdownSheet: View {
                 Section {
                     Text(Format.confidence(point.confidence))
                         .font(.headline)
-                    Text("Crowd levels are an estimate, not live data.")
+                    Text("Crowds are our best guess, not a live count.")
                         .foregroundStyle(.secondary)
                 }
 
@@ -160,7 +160,6 @@ struct ScoreBreakdownSheet: View {
 
     private func row(_ item: Contribution) -> some View {
         let value = item.part.value ?? 0
-        let percent = Int((item.share * 100).rounded())
         let points = Int(item.points.rounded())
         return HStack(spacing: 10) {
             Circle()
@@ -169,7 +168,7 @@ struct ScoreBreakdownSheet: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.part.title)
-                Text("\(percent)% of the score · adds \(points)")
+                Text("Adds \(points) points")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
@@ -179,7 +178,7 @@ struct ScoreBreakdownSheet: View {
                 .monospacedDigit()
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text("\(item.part.title): \(value) out of 100, \(percent)% of the score, adds \(points) points"))
+        .accessibilityLabel(Text("\(item.part.title): \(value) out of 100, adds \(points) points"))
     }
 
     /// -1: score feels too high, +1: too low (API verdict semantics).
@@ -199,12 +198,12 @@ struct ScoreBreakdownSheet: View {
 
     private func capText(_ cap: String) -> String {
         switch cap {
-        case "rain": String(localized: "Capped because rain is likely.")
-        case "heat": String(localized: "Capped because of extreme heat.")
-        case "cold": String(localized: "Capped because it's freezing.")
-        case "dark": String(localized: "Capped because it's dark at this hour.")
-        case "twilight": String(localized: "Capped because the sun is setting or rising.")
-        default: String(localized: "Capped by the weather.")
+        case "rain": String(localized: "Rain is likely, so this hour can't score high.")
+        case "heat": String(localized: "It's very hot, so this hour can't score high.")
+        case "cold": String(localized: "It's freezing, so this hour can't score high.")
+        case "dark": String(localized: "It's dark at this hour, so it can't score high.")
+        case "twilight": String(localized: "The sun is setting or rising, so this hour can't score high.")
+        default: String(localized: "The weather keeps this hour from scoring high.")
         }
     }
 }

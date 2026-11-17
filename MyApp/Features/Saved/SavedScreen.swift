@@ -40,10 +40,15 @@ struct SavedScreen: View {
     @State private var model = SavedScoresModel()
     @State private var plan = WeekPlanModel()
     @State private var editingAlert: AlertRule?
+    @State private var planStatus = PlanStatusModel()
+    @State private var calendarWindow: PlanWindow?
 
     var body: some View {
         NavigationStack {
             List {
+                // Planned picnics first: the next thing the user will do.
+                // Shown with or without saved places; hidden when empty.
+                PlansSection(status: planStatus, calendarWindow: $calendarWindow)
                 if favorites.isEmpty {
                     // Alerts follow below, so this is a plain row, not a
                     // full-screen ContentUnavailableView squeezed into a cell.
@@ -69,6 +74,7 @@ struct SavedScreen: View {
                 AlertsSection(editing: $editingAlert)
             }
             .groupedList()
+            .picnicPlanSupport(status: planStatus, calendarWindow: $calendarWindow)
             .navigationTitle("Saved")
             .toolbar {
                 #if os(iOS)
@@ -80,6 +86,9 @@ struct SavedScreen: View {
             }
             .navigationDestination(for: UUID.self) { id in
                 SpotDetailView(spotID: id)
+            }
+            .navigationDestination(for: SpotHourLink.self) { link in
+                SpotDetailView(spotID: link.spotID, focusHour: link.hour)
             }
             .refreshable {
                 await model.load(favorites: favorites, when: app.when)

@@ -20,7 +20,6 @@ struct Entitlement: Decodable {
 /// `POST /v1/entitlement/link` — attach a StoreKit 2 signed transaction (JWS)
 /// to a device after purchase / restore.
 struct LinkTransactionRequest: Encodable {
-    let deviceId: UUID
     let signedTransaction: String
 }
 

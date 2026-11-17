@@ -11,7 +11,6 @@ struct AppEvent: Codable {
 }
 
 struct TrackEventsRequest: Encodable {
-    let deviceId: UUID
     let events: [AppEvent]
 }
 

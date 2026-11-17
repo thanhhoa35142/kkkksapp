@@ -56,3 +56,16 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             test
+
+      # Runs after the tests (always), so a missing translation never hides
+      # test results. Every string Xcode extracts from the code must be translated for
+      # the shipped languages (catches new or reworded strings).
+      - name: Check translations (nl, de, es)
+        if: always()
+        run: |
+          xcodebuild -exportLocalizations \
+            -project MyApp.xcodeproj \
+            -localizationPath build/loc \
+            -exportLanguage nl -exportLanguage de -exportLanguage es \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+          python3 scripts/check-translations.py build/loc

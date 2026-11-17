@@ -12,4 +12,7 @@ struct DeviceRegisterRequest: Encodable {
 
 struct DeviceIDResponse: Decodable {
     let id: UUID
+    /// Present only when the server issued a credential by this call —
+    /// store it in the Keychain immediately.
+    let deviceSecret: String?
 }

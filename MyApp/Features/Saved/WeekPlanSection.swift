@@ -1,4 +1,5 @@
 import Observation
+import SwiftData
 import SwiftUI
 
 /// Thursday-evening "your weekend plan" push for the saved places (Plus).
@@ -76,6 +77,8 @@ struct WeekPlanSection: View {
     var rowStyle: BestNowRows.RowStyle = .push
 
     @Environment(AppState.self) private var app
+    @Environment(\.modelContext) private var context
+    @Query private var picnicPlans: [PicnicPlan]
     @State private var digest = WeekendDigestModel()
     #if os(iOS)
     @State private var calendarWindow: PlanWindow?
@@ -120,7 +123,7 @@ struct WeekPlanSection: View {
                 .foregroundStyle(.secondary)
         case .loaded:
             if plan.days.isEmpty {
-                Text("No 2-hour window scores 60 or more at your saved places this week.")
+                Text("No good picnic time at your saved places this week.")
                     .foregroundStyle(.secondary)
             }
             ForEach(plan.days) { window in
@@ -133,7 +136,7 @@ struct WeekPlanSection: View {
         )) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Weekend plan on Thursday")
-                Text("A notification with the best weekend window.")
+                Text("A heads-up with the best time this weekend.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -162,6 +165,12 @@ struct WeekPlanSection: View {
             NavigationLink(value: window.spotID) { PlanWindowRow(window: window) }
                 .simultaneousGesture(TapGesture().onEnded { app.track("plan_opened") })
                 .contextMenu { planActions(window) }
+                .swipeActions(edge: .leading) {
+                    if !PicnicPlans.contains(window, in: picnicPlans) {
+                        Button("Plan It", systemImage: "calendar.badge.plus") { planIt(window) }
+                            .tint(.brand)
+                    }
+                }
         case .select:
             PlanWindowRow(window: window)
                 .tag(window.spotID)
@@ -175,7 +184,10 @@ struct WeekPlanSection: View {
     @ViewBuilder
     private func planActions(_ window: PlanWindow) -> some View {
         let text = window.shareText
-        if let url = SpotLink.shareURL(spotID: window.spotID) ?? mapsURL(for: window) {
+        if !PicnicPlans.contains(window, in: picnicPlans) {
+            Button("Plan It", systemImage: "calendar.badge.plus") { planIt(window) }
+        }
+        if let url = SpotLink.shareURL(spotID: window.spotID, at: window.start) ?? mapsURL(for: window) {
             ShareLink(item: url, subject: Text(window.spotName), message: Text(text)) {
                 Label("Share", systemImage: "square.and.arrow.up")
             }
@@ -190,6 +202,12 @@ struct WeekPlanSection: View {
             app.track("plan_calendar")
         }
         #endif
+    }
+
+    /// Saves the window to Saved › Plans (on device).
+    private func planIt(_ window: PlanWindow) {
+        guard PicnicPlans.add(window, existing: picnicPlans, context: context) else { return }
+        app.track("plan_created", ["source": .string(PicnicPlans.Source.week.rawValue)])
     }
 
     private func mapsURL(for window: PlanWindow) -> URL? {
@@ -222,12 +240,16 @@ struct PlanWindowRow: View {
         .accessibilityIdentifier("planRow")
     }
 
-    private var range: String {
+    private var range: String { Self.rangeLabel(window) }
+    private var day: String { Self.dayLabel(window) }
+
+    /// "2 PM–6 PM" in the spot's time zone.
+    static func rangeLabel(_ window: PlanWindow) -> String {
         "\(Format.hour(window.start, in: window.timeZone))–\(Format.hour(window.end, in: window.timeZone))"
     }
 
     /// "Today", "Tomorrow", else the full weekday in the spot's time zone.
-    private var day: String {
+    static func dayLabel(_ window: PlanWindow) -> String {
         var calendar = Calendar.current
         calendar.timeZone = window.timeZone
         if calendar.isDateInToday(window.start) { return String(localized: "Today") }

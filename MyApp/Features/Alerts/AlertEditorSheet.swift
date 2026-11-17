@@ -201,7 +201,7 @@ struct AlertEditorSheet: View {
         error = nil
         // Editing an area rule keeps its cell; a new one sends the point.
         let request = AlertRuleRequest(
-            deviceId: DeviceIdentity.deviceID, spotId: spotID,
+            spotId: spotID,
             h3Cell: isArea ? existing?.h3Cell : nil,
             area: isArea && existing?.h3Cell == nil ? (existing?.areaCenter ?? areaCenter) : nil,
             radiusM: isArea ? radiusM : nil,

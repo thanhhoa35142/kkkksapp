@@ -33,7 +33,7 @@ struct CrowdReportSection: View {
             if let sentLevel {
                 HStack(spacing: 8) {
                     ConfirmationMark()
-                    Text("Thanks, you said \(sentLevel.title.lowercased()).")
+                    Text("Thanks! You said: \(sentLevel.title)")
                         .foregroundStyle(.secondary)
                 }
                 .accessibilityElement(children: .combine)

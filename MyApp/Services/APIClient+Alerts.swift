@@ -3,13 +3,10 @@ import Foundation
 // MARK: - Alerts
 
 extension APIClient {
-    /// `GET /v1/alerts?deviceId=` — all rules for a device.
-    func alerts(deviceID: UUID) async throws -> [AlertRule] {
-        let list: AlertRuleList = try await get(
-            "/v1/alerts",
-            query: [URLQueryItem(name: "deviceId", value: deviceID.uuidString)],
-            enveloped: true
-        )
+    /// `GET /v1/alerts` — all rules for this device (X-Device-ID/X-Device-Token headers).
+    func alerts() async throws -> [AlertRule] {
+        // deviceID travels in X-Device-ID/X-Device-Token headers.
+        let list: AlertRuleList = try await get("/v1/alerts", enveloped: true)
         return list.items
     }
 
@@ -25,11 +22,8 @@ extension APIClient {
         try await send(.put, "/v1/alerts/\(id.uuidString)", body: request)
     }
 
-    /// `DELETE /v1/alerts/{id}?deviceId=` — 204 No Content.
-    func deleteAlert(id: UUID, deviceID: UUID) async throws {
-        try await delete(
-            "/v1/alerts/\(id.uuidString)",
-            query: [URLQueryItem(name: "deviceId", value: deviceID.uuidString)]
-        )
+    /// `DELETE /v1/alerts/{id}` — 204 No Content.
+    func deleteAlert(id: UUID) async throws {
+        try await delete("/v1/alerts/\(id.uuidString)")
     }
 }

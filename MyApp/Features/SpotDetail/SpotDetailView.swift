@@ -22,6 +22,9 @@ struct SpotDetailView: View {
 
     let spotID: UUID
     var context: Context = .page
+    /// Hour to show on open (decision card, plan); ignored when the forecast
+    /// has no such hour or the day needs Plus.
+    var focusHour: Date? = nil
 
     @Environment(AppState.self) private var app
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -36,6 +39,9 @@ struct SpotDetailView: View {
     @State private var introSpotID: UUID?
     @State private var reportSent = false
     @State private var alertSaves = 0
+    /// Hour opened from a plan / link. Kept apart from the chart's
+    /// `selectedHour` so it doesn't fire the drag haptic.
+    @State private var focusedHour: Date?
 
     private var summary: SpotSummary? { app.summaries[spotID] }
 
@@ -48,7 +54,7 @@ struct SpotDetailView: View {
     }
 
     /// The hour this screen shows: chart selection, else the app's "When".
-    private var activeHour: Date { model.selectedHour ?? app.when.resolved }
+    private var activeHour: Date { model.selectedHour ?? focusedHour ?? app.when.resolved }
 
     private var activePoint: ForecastPoint? { model.point(at: activeHour) }
 
@@ -113,14 +119,20 @@ struct SpotDetailView: View {
         }
         .task(id: spotID) {
             model.selectedHour = nil
+            focusedHour = nil
             day = nil
             isNearSpot = false
             reportSent = false
             await model.load(id: spotID)
+            applyFocus(focusHour)
+            applyPendingFocus()
             app.track("spot_opened", ["kind": .string(model.detail?.kind ?? summary?.kind ?? "")])
             isNearSpot = await CrowdProximity.check(app: app, spot: coordinate,
                                                     kind: model.detail?.kind ?? summary?.kind ?? "")
         }
+        // Same spot already open (e.g. a second link to it): the task above
+        // doesn't rerun, so pick up the new hour here.
+        .onChange(of: app.detailFocus) { _, _ in applyPendingFocus() }
         .task(id: IntroKey(spotID: spotID, ready: score != nil)) {
             // Runs after the first frame (at 0), so the change animates.
             guard score != nil, introSpotID != spotID else { return }
@@ -339,6 +351,18 @@ struct SpotDetailView: View {
                     selectedHour: $model.selectedHour,
                     activeHour: activeHour)
                     .padding(.vertical, 4)
+
+                if let window = chartPlanWindow {
+                    HStack(spacing: 12) {
+                        PlanItButton(window: window, source: .chart)
+                            .buttonStyle(.bordered)
+                        Text(verbatim: PlanWindowRow.rangeLabel(window))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    .accessibilityElement(children: .contain)
+                }
             } header: {
                 Text("Next 7 days")
             } footer: {
@@ -376,7 +400,6 @@ struct SpotDetailView: View {
                     Text(verified, format: .dateTime.day().month().year())
                 }
             }
-            LabeledContent("Source", value: "OpenStreetMap")
             if reportSent {
                 HStack(spacing: 8) {
                     ConfirmationMark()
@@ -391,10 +414,7 @@ struct SpotDetailView: View {
         } header: {
             Text("About")
         } footer: {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Map data © OpenStreetMap contributors.")
-                WeatherAttribution(source: model.detail?.weatherSource)
-            }
+            WeatherAttribution(source: model.detail?.weatherSource)
         }
     }
 
@@ -463,6 +483,23 @@ struct SpotDetailView: View {
         return String(localized: "\(displayName) · \(hour) · score \(score)")
     }
 
+    /// "Plan It" under the chart: from the hour on screen, the good run
+    /// (≥ 60, no cap) up to 4 hours; when that hour doesn't start one, the
+    /// 2 hours from it as they are. nil for past hours or without data.
+    private var chartPlanWindow: PlanWindow? {
+        guard let point = activePoint, !displayName.isEmpty else { return nil }
+        let start = point.tsHour
+        guard start.addingTimeInterval(3600) > .now else { return nil }
+        let hours = model.forecast.map { ScoredHour(tsHour: $0.tsHour, score: $0.score, capReason: $0.capReason) }
+        let candidate = DecisionCandidate(spotID: spotID, spotName: displayName, timeZone: timeZone, hours: hours)
+        if let run = DecisionPlanner.startingNow([candidate], from: start) { return run }
+        let end = start.addingTimeInterval(TimeInterval(WeekPlanner.minHours) * 3600)
+        let inWindow = model.forecast.filter { $0.tsHour >= start && $0.tsHour < end }
+        let mean = Double(inWindow.map(\.score).reduce(0, +)) / Double(max(inWindow.count, 1))
+        return PlanWindow(spotID: spotID, spotName: displayName, timeZone: timeZone,
+                          start: start, end: end, score: Int(mean.rounded()))
+    }
+
     /// Free plan: hourly detail for today and tomorrow; days 3+ need Plus (spec §15).
     private func dayNeedsPlus(_ index: Int) -> Bool {
         !app.isPlus && index >= 2
@@ -478,7 +515,28 @@ struct SpotDetailView: View {
         } else if entry.date != day {
             day = entry.date
             model.selectedHour = nil
+            focusedHour = nil
         }
+    }
+
+    private func applyPendingFocus() {
+        guard let focus = app.detailFocus, focus.spotID == spotID, !model.forecast.isEmpty else { return }
+        app.detailFocus = nil
+        applyFocus(focus.hour)
+    }
+
+    /// Shows `hour` (its day in the strip, its mark on the chart) when the
+    /// forecast has it. Free: not on days that need Plus.
+    private func applyFocus(_ hour: Date?) {
+        guard let hour, model.point(at: hour) != nil else { return }
+        var calendar = Calendar.current
+        calendar.timeZone = timeZone
+        let days = model.days(in: timeZone)
+        guard let index = days.firstIndex(where: { calendar.isDate(hour, inSameDayAs: $0) }),
+              !dayNeedsPlus(index) else { return }
+        day = days[index]
+        model.selectedHour = nil
+        focusedHour = hour
     }
 }
 
@@ -517,13 +575,15 @@ private struct HeaderMap: View {
     }
 }
 
-/// Weather attribution required by Apple WeatherKit / Open-Meteo (CC BY 4.0).
+/// The Apple Weather mark + legal link, which WeatherKit's terms require
+/// next to weather it supplies (App Review checks it). Every other credit
+/// (OpenStreetMap, Open-Meteo, NOAA, Copernicus) lives in Settings → Data
+/// Sources, which their licences allow — not on the screens people use.
 struct WeatherAttribution: View {
     let source: String?
 
     private static let appleWeatherLegal = URL(string: "https://weatherkit.apple.com/legal-attribution.html")
         ?? URL(fileURLWithPath: "/")
-    private static let openMeteo = URL(string: "https://open-meteo.com/") ?? URL(fileURLWithPath: "/")
 
     var body: some View {
         switch source {
@@ -532,75 +592,8 @@ struct WeatherAttribution: View {
                 Text("Weather:")
                 Link("Apple Weather", destination: Self.appleWeatherLegal)
             }
-        case "openmeteo":
-            HStack(spacing: 4) {
-                Text("Weather:")
-                Link("Open-Meteo.com", destination: Self.openMeteo)
-            }
         default:
             EmptyView()
         }
     }
-}
-
-/// Weather for the hour on screen: temperature, rain chance and wind as three
-/// plain columns (no icons — the reason rows below already carry them).
-/// Accessibility sizes stack them as labelled rows.
-private struct HourWeatherRow: View {
-    let weather: ForecastPoint.Weather
-
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    private struct Item: Identifiable {
-        let label: String
-        let value: String
-        var id: String { label }
-    }
-
-    private var items: [Item] {
-        var result: [Item] = []
-        if let temp = weather.tempC {
-            result.append(Item(label: String(localized: "Temperature"), value: Format.temperature(celsius: temp)))
-        }
-        if let feels = weather.feelsLikeC, let temp = weather.tempC, abs(feels - temp) >= 2 {
-            result.append(Item(label: String(localized: "Feels like"), value: Format.temperature(celsius: feels)))
-        }
-        if let rain = weather.precipProb {
-            result.append(Item(label: String(localized: "Rain"), value: "\(rain)%"))
-        }
-        if let wind = weather.windKmh {
-            result.append(Item(label: String(localized: "Wind"), value: Format.wind(kmh: wind)))
-        }
-        return result
-    }
-
-    var body: some View {
-        if dynamicTypeSize.isAccessibilitySize {
-            ForEach(items) { item in
-                LabeledContent(item.label, value: item.value)
-            }
-        } else {
-            HStack(alignment: .top, spacing: 0) {
-                ForEach(items) { item in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(item.value)
-                            .font(.headline)
-                            .monospacedDigit()
-                        Text(item.label)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(Text("\(item.label): \(item.value)"))
-                }
-            }
-            .padding(.vertical, 2)
-        }
-    }
-}
-
-extension ForecastPoint.Weather {
-    /// Something to show in the weather row.
-    var hasValues: Bool { tempC != nil || precipProb != nil || windKmh != nil }
 }

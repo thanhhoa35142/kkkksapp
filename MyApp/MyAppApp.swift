@@ -15,7 +15,7 @@ struct MyAppApp: App {
     private static let modelContainer: ModelContainer = {
         if let fixture = UITestFixtures.makeModelContainer() { return fixture }
         do {
-            return try ModelContainer(for: FavoriteSpot.self)
+            return try ModelContainer(for: FavoriteSpot.self, PicnicPlan.self)
         } catch {
             fatalError("SwiftData store failed to open: \(error)")
         }

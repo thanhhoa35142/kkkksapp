@@ -100,9 +100,9 @@ enum Format {
 
     static func confidence(_ level: Int) -> String {
         switch level {
-        case 3...: String(localized: "High confidence")
-        case 2: String(localized: "Medium confidence")
-        default: String(localized: "Low confidence")
+        case 3...: String(localized: "Solid forecast")
+        case 2: String(localized: "Could still change")
+        default: String(localized: "Rough guess")
         }
     }
 }

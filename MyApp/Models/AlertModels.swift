@@ -8,7 +8,6 @@ import Foundation
 
 struct AlertRule: Decodable, Identifiable {
     let id: UUID
-    let deviceId: UUID
     let spotId: UUID?
     let h3Cell: UInt64?
     /// Cell centre for area rules (3 decimals); null for spot rules.
@@ -40,7 +39,6 @@ struct AlertRuleList: Decodable {
 }
 
 struct AlertRuleRequest: Encodable {
-    let deviceId: UUID
     var spotId: UUID?
     var h3Cell: UInt64?
     var area: AreaPoint? = nil

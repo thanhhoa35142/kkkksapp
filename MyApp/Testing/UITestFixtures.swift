@@ -9,6 +9,7 @@ import SwiftData
 /// - `-UITestPlan plus` → Plus entitlement (default Free)
 /// - `-onboardingDone YES` → skip onboarding (plain UserDefaults argument)
 /// - `-UIPreferredContentSizeCategoryName <category>` → Dynamic Type
+/// - `-UITestLocalHour <0–23>` → the fixture city's local hour at launch (default 10)
 ///
 /// Names are deliberately long/awkward to catch wrapping and truncation.
 enum UITestFixtures {
@@ -33,6 +34,31 @@ enum UITestFixtures {
     }
 
     static let place = Place.city(slug: "amsterdam", name: "Amsterdam", latitude: 52.37, longitude: 4.89)
+
+    /// The fixture city's clock. Scores follow the spot-local daylight curve
+    /// (dark before 08:00 and from 20:00), so with the real Amsterdam zone a
+    /// CI run at night saw only "It's dark out" and every Best Now layout
+    /// check failed. Instead the city gets the fixed-offset zone in which it
+    /// is `localHour` o'clock at launch (default 10 = mid-morning), so the
+    /// screens look the same whenever CI runs. `-UITestLocalHour 2` tests the
+    /// night state on purpose.
+    static let localHour: Int = {
+        let raw = UserDefaults.standard.object(forKey: "UITestLocalHour") as? String
+        return raw.flatMap(Int.init).map { min(max($0, 0), 23) } ?? 10
+    }()
+
+    static let timeZone: TimeZone = {
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC")!
+        var offset = localHour - utc.component(.hour, from: .now)  // hours ahead of UTC
+        if offset < -12 { offset += 24 }   // IANA fixed zones span UTC−12…UTC+14
+        if offset > 14 { offset -= 24 }
+        // POSIX sign: "Etc/GMT-10" is UTC+10.
+        let id = offset == 0 ? "Etc/GMT" : "Etc/GMT\(offset > 0 ? "-" : "+")\(abs(offset))"
+        return TimeZone(identifier: id) ?? TimeZone(secondsFromGMT: offset * 3600)!
+    }()
+
+    static var timeZoneID: String { timeZone.identifier }
 
     // MARK: Spots
 
@@ -65,7 +91,7 @@ enum UITestFixtures {
     /// Hourly score: daylight curve per day, capped "dark" at night.
     static func score(_ spot: Spot, at date: Date) -> (score: Int, cap: String?) {
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: "Europe/Amsterdam")!
+        calendar.timeZone = timeZone
         let hour = calendar.component(.hour, from: date)
         let day = calendar.component(.weekday, from: date)
         guard (8..<20).contains(hour) else { return (10, "dark") }
@@ -81,11 +107,11 @@ enum UITestFixtures {
     static func makeModelContainer() -> ModelContainer? {
         guard isActive else { return nil }
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        guard let container = try? ModelContainer(for: FavoriteSpot.self, configurations: config) else { return nil }
+        guard let container = try? ModelContainer(for: FavoriteSpot.self, PicnicPlan.self, configurations: config) else { return nil }
         let context = ModelContext(container)
         for (index, spot) in spots.prefix(3).enumerated() {
             let summary = SpotSummary(id: spot.id, kind: spot.kind, name: spot.name, names: [:], city: "Amsterdam",
-                                      tz: "Europe/Amsterdam", latitude: spot.lat, longitude: spot.lon,
+                                      tz: timeZoneID, latitude: spot.lat, longitude: spot.lon,
                                       distanceM: spot.distanceM, score: nil)
             context.insert(FavoriteSpot(summary: summary, sortIndex: index))
         }
@@ -115,6 +141,10 @@ enum UITestFixtures {
             guard isPlus else { return problem(404, "not_found") }
             return ok(["spotIds": spots.prefix(3).map(\.id.uuidString), "enabled": true,
                        "sendDow": 4, "sendHour": 18, "skippedIds": [String]()] as JSON)
+        case (_, "devices") where parts.last == "nudge":
+            // Good-day push: DELETE is 204; GET / PUT answer an active subscription.
+            if method == "DELETE" { return (204, Data()) }
+            return ok(["enabled": true, "sendHour": 8, "homeSet": true, "homeUpdatedAt": iso(.now)] as JSON)
         case ("GET", "alerts"):
             return ok(["items": [alertRule()]])
         case ("POST", "events"):
@@ -123,13 +153,18 @@ enum UITestFixtures {
             return ok(["status": "accepted"])
         case ("GET", "packs"):
             return ok(["items": [JSON]([[
-                "slug": "amsterdam", "name": "Amsterdam", "country": "NL", "tz": "Europe/Amsterdam",
+                "slug": "amsterdam", "name": "Amsterdam", "country": "NL", "tz": timeZoneID,
                 "center": [4.89, 52.37], "bbox": [4.73, 52.28, 5.07, 52.43], "activeSpots": 412,
             ]])])
+        case ("GET", "getaways"):
+            return ok(getaways(start: q("start"), days: Int(q("days") ?? "") ?? 2))
         case ("GET", "recommendations"):
             let when = q("when").flatMap(parseISO) ?? .now
             let limit = Int(q("limit") ?? "") ?? 3
             return ok(["when": iso(when), "items": spots.prefix(limit).map { recommendation($0, at: when) }] as JSON)
+        case ("GET", "weather"):
+            let start = Date.now.startOfHour
+            return ok((0..<24).map { nearbyWeatherPoint(at: start.addingTimeInterval(Double($0) * 3600), index: $0) })
         case ("GET", "spots") where parts.count == 2:
             let when = q("when").flatMap(parseISO) ?? .now
             let from = q("from").flatMap(parseISO)
@@ -169,7 +204,7 @@ enum UITestFixtures {
 
     private static func recommendation(_ spot: Spot, at date: Date) -> [String: Any] {
         ["id": spot.id.uuidString, "kind": spot.kind, "name": spot.name, "names": [String: String](),
-         "coordinates": [spot.lon, spot.lat], "country": "NL", "city": "Amsterdam", "tz": "Europe/Amsterdam",
+         "coordinates": [spot.lon, spot.lat], "country": "NL", "city": "Amsterdam", "tz": timeZoneID,
          "lastVerifiedAt": iso(.now.addingTimeInterval(-40 * 86_400)), "distanceM": spot.distanceM,
          "score": scoreJSON(spot, at: date)]
     }
@@ -177,7 +212,7 @@ enum UITestFixtures {
     private static func feature(_ spot: Spot, at date: Date, from: Date?, hours: Int?) -> [String: Any] {
         var properties: [String: Any] = [
             "id": spot.id.uuidString, "kind": spot.kind, "name": spot.name, "names": [String: String](),
-            "country": "NL", "city": "Amsterdam", "tz": "Europe/Amsterdam",
+            "country": "NL", "city": "Amsterdam", "tz": timeZoneID,
             "lastVerifiedAt": iso(.now.addingTimeInterval(-40 * 86_400)), "when": iso(date),
             "score": scoreJSON(spot, at: date),
         ]
@@ -194,7 +229,7 @@ enum UITestFixtures {
 
     private static func detail(_ spot: Spot) -> [String: Any] {
         ["id": spot.id.uuidString, "kind": spot.kind, "name": spot.name, "names": [String: String](),
-         "coordinates": [spot.lon, spot.lat], "country": "NL", "city": "Amsterdam", "tz": "Europe/Amsterdam",
+         "coordinates": [spot.lon, spot.lat], "country": "NL", "city": "Amsterdam", "tz": timeZoneID,
          "lastVerifiedAt": iso(.now.addingTimeInterval(-40 * 86_400)),
          "amenities": [JSON]([["type": "toilet", "distanceM": 120, "source": "osm"],
                        ["type": "water", "distanceM": 340, "source": "osm"],
@@ -213,11 +248,72 @@ enum UITestFixtures {
                             "windKmh": 12.0, "uv": 4.0, "cloud": 30]] as JSON
     }
 
+    /// `/v1/getaways`: two cities over the requested range, built from its
+    /// `start` / `days` so any preset gets a valid answer. Amsterdam has no
+    /// window on its second day (`weatherScore: null`). The top spot's total
+    /// score is a little under the weather score, as it is in practice.
+    private static func getaways(start: String?, days: Int) -> JSON {
+        let first = start.flatMap { CivilDay(string: $0) } ?? CivilDay(.now, in: .current)
+        let count = min(max(days, 1), 3)
+        let items: [JSON] = [
+            getawayCity(slug: "lisbon", name: "Lisbon", country: "PT", tz: "Europe/Lisbon",
+                        center: [-9.14, 38.72], spot: "Jardim da Estrela", scores: [71, 86],
+                        first: first, count: count),
+            getawayCity(slug: "amsterdam", name: "Amsterdam", country: "NL", tz: "Europe/Amsterdam",
+                        center: [4.89, 52.37], spot: "Vondelpark", scores: [74, nil],
+                        first: first, count: count),
+        ]
+        return ["start": first.string, "days": count, "items": items, "computedAt": iso(.now)]
+    }
+
+    private static func getawayCity(slug: String, name: String, country: String, tz: String,
+                                    center: [Double], spot: String, scores: [Int?],
+                                    first: CivilDay, count: Int) -> JSON {
+        let used: [Int?] = (0..<count).map { scores[$0 % scores.count] }
+        let best = used.compactMap { $0 }.max() ?? 0
+        let bestDay = first.adding(days: used.firstIndex { $0 == best } ?? 0)
+        let begin = bestDay.date(in: TimeZone(identifier: "UTC") ?? .gmt).addingTimeInterval(12 * 3600)
+        var dayScores: [JSON] = []
+        for (offset, score) in used.enumerated() {
+            let value: Any = score.map { $0 as Any } ?? NSNull()
+            dayScores.append(["date": first.adding(days: offset).string, "weatherScore": value, "goodHours": 4])
+        }
+        let window: JSON = ["start": iso(begin), "end": iso(begin.addingTimeInterval(4 * 3600)), "weatherScore": best]
+        let topSpot: JSON = ["id": "00000000-0000-4000-8000-0000000000b1", "name": spot, "score": max(best - 6, 0)]
+        let reasons: [JSON] = [
+            ["code": "getaway.dry_day", "params": JSON()],
+            ["code": "getaway.long_window", "params": ["hours": 4]],
+        ]
+        var city: JSON = ["slug": slug, "name": name, "country": country, "tz": tz, "center": center]
+        city["windowDays"] = used.compactMap { $0 }.count
+        city["bestDay"] = bestDay.string
+        city["window"] = window
+        city["goodHours"] = 6
+        city["dayScores"] = dayScores
+        city["topSpot"] = topSpot
+        city["reasons"] = reasons
+        return city
+    }
+
+    /// `/v1/weather/nearby`: a mild day with a rain spell and one hour with
+    /// only a temperature (every field but `ts` is optional).
+    private static func nearbyWeatherPoint(at date: Date, index: Int) -> [String: Any] {
+        let temp = 16.0 + 6.0 * sin(Double(index) / 24 * 2 * .pi)
+        var point: [String: Any] = ["ts": iso(date), "tempC": (temp * 10).rounded() / 10]
+        if index == 5 { return point }
+        point["feelsLikeC"] = ((temp - 1.5) * 10).rounded() / 10
+        point["precipProb"] = (6..<10).contains(index) ? 70 : (index % 4 == 0 ? 25 : 5)
+        point["windKmh"] = 12.0
+        point["uv"] = 3.0
+        point["cloud"] = (6..<10).contains(index) ? 90 : 35
+        return point
+    }
+
     private static func alertRule() -> [String: Any] {
         ["id": "00000000-0000-4000-8000-0000000000a1", "deviceId": UUID().uuidString,
          "spotId": spots[1].id.uuidString, "h3Cell": NSNull(), "areaCenter": NSNull(), "radiusM": NSNull(),
          "minScore": 75, "daysMask": 65, "startLocal": "10:00", "endLocal": "18:00",
-         "tz": "Europe/Amsterdam", "enabled": true]
+         "tz": timeZoneID, "enabled": true]
     }
 
     // MARK: Encoding helpers

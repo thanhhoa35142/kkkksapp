@@ -53,6 +53,20 @@ enum AppTab: Hashable {
     case bestNow, map, saved, settings
 }
 
+/// The plan sheet: one of the user's plans (local id), or a shared plan by
+/// token (link, follower push, followed row).
+enum PlanSheet: Identifiable, Hashable {
+    case own(planID: UUID)
+    case shared(token: String)
+
+    var id: String {
+        switch self {
+        case .own(let planID): "own-\(planID.uuidString)"
+        case .shared(let token): "shared-\(token)"
+        }
+    }
+}
+
 /// App-wide UI state shared by every screen and layout (compact tabs,
 /// iPad/Mac split view). Layout-independent on purpose: folding a foldable
 /// or resizing a window swaps layouts without losing the selection,
@@ -74,6 +88,12 @@ final class AppState {
     private var purchasedInPaywall = false
     /// Bumped to ask the map to center on `selectedSpotID`.
     var mapFocusVersion = 0
+    /// Non-nil = plan sheet open (own plan or a shared one).
+    var planSheet: PlanSheet?
+    /// Paywall to open once the plan sheet has closed (one sheet at a time).
+    var deferredPaywall: PaywallReason?
+    /// Non-nil = Getaways sheet open, opened from this entry point.
+    var getawaysSource: GetawaySource?
 
     // Persisted preferences
     private(set) var place: Place?
@@ -92,6 +112,8 @@ final class AppState {
 
     let location = LocationProvider()
     let alerts = AlertsStore()
+    let planSync = PlanSyncStore()
+    let nudge = NudgeStore()
 
     private let defaults = UserDefaults.standard
     private let api = AppConfig.apiClient
@@ -110,6 +132,7 @@ final class AppState {
            let decoded = try? JSONDecoder().decode(SpotFilters.self, from: data) {
             filters = decoded
         }
+        nudge.homeProvider = { [weak self] in self?.nudgeHome() }
     }
 
     func setFilters(_ value: SpotFilters) {
@@ -155,17 +178,41 @@ final class AppState {
         return coordinate
     }
 
+    /// Home for the good-day push: the chosen city's centre, or the last known
+    /// fix. Never asks for a location (unlike `placeCoordinate()`); the store
+    /// rounds it to ~1 km.
+    func nudgeHome() -> NudgeHome? {
+        switch place {
+        case .currentLocation:
+            guard location.isAuthorized, let coordinate = location.coordinate else { return nil }
+            return NudgeHome(source: .location, coordinate: coordinate)
+        case .city(_, _, let lat, let lon):
+            return NudgeHome(source: .city, latitude: lat, longitude: lon)
+        case nil:
+            return nil
+        }
+    }
+
     /// Hands the widget a coarse point (WidgetBridge rounds to ~1 km) and
     /// reloads it only when something it shows changed.
     private func updateWidget(place: Place, coordinate: CLLocationCoordinate2D) {
         let snapshot = WidgetBridge.Snapshot(
             latitude: coordinate.latitude, longitude: coordinate.longitude,
             placeName: place.title, apiBaseURL: AppConfig.apiBaseURL.absoluteString,
-            usesMetric: Self.usesMetricDistance)
+            usesMetric: Self.usesMetricDistance, isPlus: isPlus)
         var rounded = snapshot
         rounded.latitude = (snapshot.latitude * 100).rounded() / 100
         rounded.longitude = (snapshot.longitude * 100).rounded() / 100
         guard WidgetBridge.load() != rounded else { return }
+        WidgetBridge.save(snapshot)
+        WidgetCenter.shared.reloadTimelines(ofKind: WidgetBridge.bestNowKind)
+    }
+
+    /// Keeps the widget's Free / Plus hour limit in step with the plan
+    /// (the snapshot is otherwise written only when the place changes).
+    func syncWidgetEntitlement() {
+        guard var snapshot = WidgetBridge.load(), snapshot.isPlus != isPlus else { return }
+        snapshot.isPlus = isPlus
         WidgetBridge.save(snapshot)
         WidgetCenter.shared.reloadTimelines(ofKind: WidgetBridge.bestNowKind)
     }
@@ -190,6 +237,23 @@ final class AppState {
         if focusMap { mapFocusVersion += 1 }
     }
 
+    /// An hour Spot Detail should show when it opens (a plan, the decision
+    /// card, a shared link with `?at=`). Consumed once by the detail for
+    /// that spot, whichever container shows it (push, map sheet, inspector).
+    struct DetailFocus: Equatable {
+        let spotID: UUID
+        let hour: Date
+    }
+
+    var detailFocus: DetailFocus?
+
+    /// Opens a spot at an hour. The focus is set before the selection so the
+    /// detail finds it when it loads.
+    func open(spotID: UUID, at hour: Date, focusMap: Bool) {
+        detailFocus = DetailFocus(spotID: spotID, hour: hour)
+        open(spotID: spotID, focusMap: focusMap)
+    }
+
     /// Picks an hour; returns false (and shows the paywall) when it needs Plus.
     @discardableResult
     func select(when newValue: WhenSelection) -> Bool {
@@ -203,12 +267,18 @@ final class AppState {
 
     // MARK: - Bootstrap & plan
 
-    /// Registers this install (no location, no PII) and loads the plan.
-    func bootstrap() async {
-        let deviceID = DeviceIdentity.deviceID
+    /// Time of the last (attempted) device registration, in memory only: a
+    /// cold launch starts empty and `bootstrap()` registers.
+    @ObservationIgnored private var lastDeviceRegisterAt: Date?
+
+    /// Registers this install (no location, no PII); the server also bumps
+    /// `last_seen_at`. Stamped before the request so a foreground event
+    /// racing the launch registration is throttled; a failure clears it.
+    private func registerDevice() async {
+        lastDeviceRegisterAt = .now
         do {
             _ = try await api.registerDevice(DeviceRegisterRequest(
-                id: deviceID,
+                id: DeviceIdentity.deviceID,
                 apnsToken: KeychainStore.string(for: .apnsToken),
                 apnsEnv: KeychainStore.string(for: .apnsEnv),
                 locale: Locale.preferredLanguages.first,
@@ -217,12 +287,32 @@ final class AppState {
                 prefs: ["companions": .array(companions.map { .string($0.rawValue) })]
             ))
         } catch {
+            lastDeviceRegisterAt = nil
             Log.api.error("device register failed: \(error.localizedDescription)")
         }
+    }
+
+    /// Back from the background: re-registers (refreshes `last_seen_at`) at
+    /// most once an hour. Cold launch is covered by `bootstrap()`.
+    func touchDeviceIfStale(now: Date = .now) async {
+        if let last = lastDeviceRegisterAt, now.timeIntervalSince(last) < 3600 { return }
+        await registerDevice()
+    }
+
+    /// Registers this install and loads the plan.
+    func bootstrap() async {
+        let deviceID = DeviceIdentity.deviceID
+        await registerDevice()
+        // APNs can rotate the token (restore, reinstall, OS update); asking on
+        // every launch hands the current one to handleDeviceToken, which
+        // re-registers it. No prompt: only runs when already authorized.
+        await PushManager.shared.registerIfAuthorized()
         await refreshEntitlement()
         listenForTransactions()
         await linkCurrentEntitlements()
         await alerts.load()
+        planSync.requestSync()
+        await nudge.syncIfNeeded()
         await EventQueue.shared.flush(client: api, deviceID: deviceID)
     }
 
@@ -251,7 +341,7 @@ final class AppState {
     /// Sends a StoreKit signed transaction to the backend, then reloads the plan.
     func link(signedTransaction jws: String) async {
         do {
-            _ = try await api.linkTransaction(deviceID: DeviceIdentity.deviceID, signedTransaction: jws)
+            _ = try await api.linkTransaction(signedTransaction: jws)
         } catch {
             Log.store.error("link transaction failed: \(error.localizedDescription)")
         }
@@ -270,8 +360,8 @@ final class AppState {
             guard case .verified(let transaction) = result,
                   PaywallSheet.productIDs.contains(transaction.productID) else { continue }
             do {
-                _ = try await api.linkTransaction(deviceID: DeviceIdentity.deviceID,
-                                                  signedTransaction: result.jwsRepresentation)
+                _ = try await api.linkTransaction(
+                    signedTransaction: result.jwsRepresentation)
                 linked = true
             } catch {
                 Log.store.error("link current entitlement failed: \(error.localizedDescription)")
@@ -345,6 +435,7 @@ final class AppState {
         KeychainStore.delete(.deviceID)
         KeychainStore.delete(.apnsToken)
         KeychainStore.delete(.apnsEnv)
+        KeychainStore.delete(.deviceSecret)
         defaults.removeObject(forKey: "place")
         defaults.removeObject(forKey: "companions")
         defaults.removeObject(forKey: "filters")
@@ -352,6 +443,9 @@ final class AppState {
         companions = []
         filters = SpotFilters()
         alerts.reset()
+        planSync.reset()
+        nudge.reset()
+        planSheet = nil
         PaywallSurvey.reset()
         WidgetBridge.clear()
         WidgetCenter.shared.reloadAllTimelines()

@@ -99,6 +99,17 @@ enum SpotLink {
         base?.appendingPathComponent("s").appendingPathComponent(spotID.uuidString.lowercased())
     }
 
+    /// A timed link — "this spot at this hour" — `…/s/<id>?at=<UTC>`
+    /// (`PlanLink`). Opening it selects that hour when it is still usable.
+    static func shareURL(spotID: UUID, at hour: Date, base: URL? = AppConfig.shareBaseURL) -> URL? {
+        shareURL(spotID: spotID, base: base).map { PlanLink.url($0, at: hour) }
+    }
+
+    /// `pickhour://spot/<id>?at=<UTC>`.
+    static func appURL(spotID: UUID, at hour: Date) -> URL {
+        PlanLink.url(appURL(spotID: spotID), at: hour)
+    }
+
     /// Accepts `pickhour://spot/<id>` and the share page `https://<host>/s/<id>`.
     static func spotID(from url: URL, shareBase: URL? = AppConfig.shareBaseURL) -> UUID? {
         if url.scheme == "pickhour", url.host == "spot" {

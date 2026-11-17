@@ -33,7 +33,7 @@ final class AlertsStore {
 
     func load() async {
         do {
-            rules = try await api.alerts(deviceID: DeviceIdentity.deviceID)
+            rules = try await api.alerts()
             isLoaded = true
             await loadNames()
         } catch {
@@ -77,7 +77,7 @@ final class AlertsStore {
         rules.removeAll { $0.id == rule.id }
         if areaNames.removeValue(forKey: rule.id) != nil { AreaNames.save(areaNames) }
         do {
-            try await api.deleteAlert(id: rule.id, deviceID: DeviceIdentity.deviceID)
+            try await api.deleteAlert(id: rule.id)
         } catch {
             Log.alerts.error("alert delete failed: \(error.localizedDescription)")
             await load()
@@ -121,7 +121,7 @@ private enum AreaNames {
 
 extension AlertRuleRequest {
     init(rule: AlertRule, enabled: Bool) {
-        self.init(deviceId: rule.deviceId, spotId: rule.spotId, h3Cell: rule.h3Cell, radiusM: rule.radiusM,
+        self.init(spotId: rule.spotId, h3Cell: rule.h3Cell, radiusM: rule.radiusM,
                   minScore: rule.minScore, daysMask: rule.daysMask, startLocal: rule.startLocal,
                   endLocal: rule.endLocal, tz: rule.tz, enabled: enabled)
     }

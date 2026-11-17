@@ -7,7 +7,7 @@ extension APIClient {
     /// Never include location or PII in event props.
     @discardableResult
     func trackEvents(deviceID: UUID, events: [AppEvent]) async throws -> TrackEventsResponse {
-        let request = TrackEventsRequest(deviceId: deviceID, events: events)
+        let request = TrackEventsRequest(events: events)
         return try await send(.post, "/v1/events", body: request)
     }
 }

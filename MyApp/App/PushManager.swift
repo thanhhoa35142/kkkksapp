@@ -18,6 +18,11 @@ final class PushManager {
     private init() {}
 
     /// Returns whether the user granted alert permission.
+    ///
+    /// Always asks for the full set of options, so it also upgrades a
+    /// `.provisional` grant (set outside the app): iOS shows the system
+    /// prompt then. Callers must never skip this call because the status
+    /// is `.provisional` — alerts would stay quiet.
     @discardableResult
     func requestAuthorization() async -> Bool {
         do {

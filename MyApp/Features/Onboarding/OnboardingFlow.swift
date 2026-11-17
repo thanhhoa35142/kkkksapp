@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// S0 · Onboarding — Apple-style Welcome, not a carousel: two pushed
-/// steps (Welcome → Where), at most 2 taps to content, no notification
-/// prompt, no paywall. Choosing a place finishes onboarding.
+/// S0 · Onboarding — Apple-style Welcome, not a carousel: pushed steps
+/// (Welcome → Where → Good-day tips), no paywall. The only notification
+/// question is the last step, in context; Not Now is a real decline (no
+/// permission request, no server call) and the user can opt in from Settings.
 ///
 /// There is no "Who's coming?" step: the backend doesn't rank by
 /// companions yet, so asking would promise something the app doesn't do.
@@ -11,8 +12,10 @@ struct OnboardingFlow: View {
     @Environment(AppState.self) private var app
     @Environment(\.dismiss) private var dismiss
     @State private var path: [Step] = []
+    /// "location" | "city" — how the first place was chosen.
+    @State private var placeKind = "location"
 
-    enum Step: Hashable { case place, city }
+    enum Step: Hashable { case place, city, goodDay }
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -21,12 +24,19 @@ struct OnboardingFlow: View {
                     switch step {
                     case .place:
                         PlaceStep(onCity: { path.append(.city) },
-                                  onDone: { finish(place: "location") })
+                                  onDone: { placeChosen("location") })
                     case .city:
-                        CityPickerList { finish(place: "city") }
+                        CityPickerList { placeChosen("city") }
+                    case .goodDay:
+                        GoodDayStep { finish(place: placeKind) }
                     }
                 }
         }
+    }
+
+    private func placeChosen(_ kind: String) {
+        placeKind = kind
+        path.append(.goodDay)
     }
 
     /// `place`: "location" | "city" — how the first place was chosen.
@@ -68,9 +78,6 @@ private struct WelcomeStep: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
-                Text("Map data © OpenStreetMap contributors")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
             }
             .frame(maxWidth: 520)
             .padding(.horizontal, 24)
@@ -219,5 +226,67 @@ private struct PlaceStep: View {
             .padding(.bottom, 12)
         }
         .inlineTitle()
+    }
+}
+
+// MARK: - Step 3 · Good-day tips
+
+private struct GoodDayStep: View {
+    var onDone: () -> Void
+
+    @Environment(AppState.self) private var app
+    @State private var working = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Good-day tips")
+                    .font(.largeTitle.bold())
+                Text("We'll tell you when it's a great day for a picnic near you. At most twice a week.")
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: 520, alignment: .leading)
+            .padding(.horizontal, 24)
+            .padding(.top, 24)
+            .frame(maxWidth: .infinity)
+        }
+        .safeAreaInset(edge: .bottom) {
+            VStack(spacing: 12) {
+                Button {
+                    answer { await app.nudge.turnOn() }
+                } label: {
+                    Text("Turn On").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+
+                Button {
+                    onDone()
+                } label: {
+                    Text("Not Now").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+
+                Text("Good-day tips are optional. You can turn them on later in Settings.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .controlSize(.large)
+            .disabled(working)
+            .frame(maxWidth: 520)
+            .padding(.horizontal, 24)
+            .padding(.bottom, 12)
+        }
+        .inlineTitle()
+    }
+
+    /// Runs the opt-in, then moves on whatever the answer was.
+    private func answer(_ optIn: @escaping () async -> Void) {
+        Task {
+            working = true
+            await optIn()
+            working = false
+            onDone()
+        }
     }
 }

@@ -22,6 +22,17 @@ actor APIClient {
         ]
     }()
 
+    /// Device-scoped calls authenticate with the per-device secret issued at
+    /// registration. Sent on every request: public read endpoints ignore it,
+    /// device endpoints require it. No secret yet (first launch, before
+    /// `POST /v1/devices` returns one) → only the ID goes out.
+    private static func applyDeviceHeaders(to request: inout URLRequest) {
+        request.setValue(DeviceIdentity.deviceID.uuidString, forHTTPHeaderField: "X-Device-ID")
+        if let secret = DeviceIdentity.deviceSecret {
+            request.setValue(secret, forHTTPHeaderField: "X-Device-Token")
+        }
+    }
+
     init(baseURL: URL, session: URLSession = .shared) {
         self.baseURL = baseURL
         self.session = session
@@ -62,6 +73,7 @@ actor APIClient {
         request.setValue(requestID, forHTTPHeaderField: "X-Request-ID")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         Self.clientHeaders.forEach { request.setValue($1, forHTTPHeaderField: $0) }
+        Self.applyDeviceHeaders(to: &request)
 
         let (data, response) = try await session.data(for: request)
         try validate(response: response, data: data)
@@ -75,6 +87,7 @@ actor APIClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         Self.clientHeaders.forEach { request.setValue($1, forHTTPHeaderField: $0) }
+        Self.applyDeviceHeaders(to: &request)
         request.httpBody = try encoder.encode(AnyEncodable(body))
 
         let (data, response) = try await session.data(for: request)
@@ -88,6 +101,7 @@ actor APIClient {
         request.setValue(requestID, forHTTPHeaderField: "X-Request-ID")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         Self.clientHeaders.forEach { request.setValue($1, forHTTPHeaderField: $0) }
+        Self.applyDeviceHeaders(to: &request)
 
         let (data, response) = try await session.data(for: request)
         try validate(response: response, data: data)
@@ -115,14 +129,30 @@ actor APIClient {
         }
     }
 
-    private static func parseDate(_ string: String) throws -> Date {
+    /// RFC 3339 with or without a fraction. Go sends RFC3339Nano (0–9
+    /// fractional digits, trailing zeros trimmed); the fraction is brought to
+    /// exactly 3 digits first so the formatter never sees more than it is
+    /// documented to accept. Pure — unit-tested.
+    static func parseDate(_ string: String) throws -> Date {
         let withFraction = ISO8601DateFormatter()
         withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = withFraction.date(from: string) { return date }
+        if let date = withFraction.date(from: normalizedFraction(string)) { return date }
         let plain = ISO8601DateFormatter()
         plain.formatOptions = [.withInternetDateTime]
         if let date = plain.date(from: string) { return date }
         throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "bad date: \(string)"))
+    }
+
+    /// `…:SS.<digits><zone>` → `…:SS.ddd<zone>` (truncated or zero-padded).
+    /// Strings without a fraction are returned unchanged (plain fallback).
+    static func normalizedFraction(_ string: String) -> String {
+        guard let t = string.firstIndex(where: { $0 == "T" || $0 == "t" }),
+              let dot = string[t...].firstIndex(of: ".") else { return string }
+        let afterDot = string.index(after: dot)
+        let zone = string[afterDot...].firstIndex(where: { !$0.isASCII || !$0.isNumber }) ?? string.endIndex
+        let digits = string[afterDot..<zone]
+        let millis = String(digits.prefix(3)).padding(toLength: 3, withPad: "0", startingAt: 0)
+        return String(string[...dot]) + millis + String(string[zone...])
     }
 }
 

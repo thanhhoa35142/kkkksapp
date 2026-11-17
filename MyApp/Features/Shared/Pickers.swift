@@ -104,6 +104,7 @@ struct PlaceMenu: View {
             }
             .disabled(app.location.isDenied)
             Button("Choose a City…") { showCityPicker = true }
+            Button("Where's Nice This Weekend?") { app.getawaysSource = .placeMenu }
         } label: {
             Text(app.place?.title ?? String(localized: "Choose Place"))
                 .lineLimit(1)
@@ -113,10 +114,14 @@ struct PlaceMenu: View {
 
 /// City packs grouped by country (UI_SPEC S12 / onboarding "Choose a City").
 struct CityPickerList: View {
+    /// Adds the "Great This Weekend" section on top (not in onboarding).
+    var showsGetaways = false
     var onPicked: () -> Void
 
     @Environment(AppState.self) private var app
     @State private var query = ""
+    @State private var weekend = GetawaysModel()
+    @State private var trackedSection = false
 
     private var grouped: [(country: String, packs: [CityPack])] {
         let filtered = app.packs.filter {
@@ -133,6 +138,7 @@ struct CityPickerList: View {
 
     var body: some View {
         List {
+            weekendSection
             ForEach(grouped, id: \.country) { group in
                 Section(group.country) {
                     ForEach(group.packs) { pack in
@@ -176,6 +182,46 @@ struct CityPickerList: View {
         .inlineTitle()
         .searchable(text: $query, prompt: "City or country")
         .task { await app.loadPacksIfNeeded() }
+        .task(id: app.isPlus) { await loadWeekend() }
+    }
+
+    // MARK: Great This Weekend
+
+    /// The 3 best cities this weekend. Hidden while searching, and when the
+    /// forecast can't load or has no good window anywhere.
+    @ViewBuilder
+    private var weekendSection: some View {
+        let cities = Array(weekend.items.prefix(GetawayRules.sectionCount))
+        if showsGetaways, query.isEmpty, !app.packs.isEmpty, !cities.isEmpty {
+            Section {
+                ForEach(Array(cities.enumerated()), id: \.element.id) { index, city in
+                    Button {
+                        GetawayNavigation.open(city, rank: index + 1, source: "cityPicker", app: app)
+                        onPicked()
+                    } label: {
+                        GetawayRow(city: city,
+                                   distanceMeters: GetawayRules.distanceMeters(from: app.location.coordinate, to: city),
+                                   isHome: city.slug == homeSlug)
+                    }
+                    .tint(.primary)
+                }
+            } header: {
+                Text("Great This Weekend")
+            }
+        }
+    }
+
+    private var homeSlug: String? {
+        GetawayRules.homeSlug(place: app.place, packs: app.packs, fix: app.location.coordinate)
+    }
+
+    private func loadWeekend() async {
+        guard showsGetaways, let range = GetawayRules.range(for: .thisWeekend) else { return }
+        await weekend.load(range: range, isPlus: app.isPlus)
+        let count = min(weekend.items.count, GetawayRules.sectionCount)
+        guard count > 0, !trackedSection else { return }
+        trackedSection = true
+        app.track("getaways_section_shown", ["count": .number(Double(count))])
     }
 }
 
