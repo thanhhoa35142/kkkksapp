@@ -23,6 +23,17 @@ final class LayoutTests: XCTestCase {
         continueAfterFailure = true
     }
 
+    /// Every failure carries a screenshot of the moment it happened, so CI
+    /// failures can be reviewed without a Mac (ios-failure-screenshots).
+    override func record(_ issue: XCTIssue) {
+        var issue = issue
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        shot.name = "failure"
+        shot.lifetime = .keepAlways
+        issue.add(shot)
+        super.record(issue)
+    }
+
     /// `localHour`: the fixture city's clock at launch (see
     /// `UITestFixtures.localHour`) — mid-morning by default, so the checks
     /// do not depend on when CI runs.
