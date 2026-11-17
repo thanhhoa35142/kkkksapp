@@ -111,8 +111,8 @@ final class LayoutTests: XCTestCase {
             Layout.assertNoOverlap([top] + Layout.outermost(Layout.visible(
                 app.descendants(matching: .any).matching(identifier: "spotRow"), in: app)), "de \(size) Best Now rows")
 
-            let row = app.descendants(matching: .any).matching(identifier: "spotRow").element(boundBy: 0)
-            if row.waitForExistence(timeout: 5) {
+            let row = Layout.firstPlainRow(app)
+            if row.exists {
                 row.tap()
                 let directions = app.buttons["spotAction.directions"]
                 XCTAssertTrue(directions.waitForExistence(timeout: 10), "[de \(size)] Spot Detail didn't open")
@@ -129,8 +129,12 @@ final class LayoutTests: XCTestCase {
         for size in TextSize.allCases {
             let app = launch(size)
             // The long-named fixture is the first plain row (row 2 overall).
-            let row = app.descendants(matching: .any).matching(identifier: "spotRow").element(boundBy: 0)
-            XCTAssertTrue(row.waitForExistence(timeout: 10))
+            let row = Layout.firstPlainRow(app)
+            guard row.exists else {
+                XCTFail("[\(size)] no plain spot row to open")
+                app.terminate()
+                continue
+            }
             row.tap()
 
             let directions = app.buttons["spotAction.directions"]
@@ -271,6 +275,17 @@ enum Layout {
         }.map { elements[$0] }
     }
 
+    /// The first plain Best Now row ("More nearby"). At large text the
+    /// decision card and the hour strip fill the screen and the lazy list
+    /// has not created the row yet, so this scrolls until it exists.
+    static func firstPlainRow(_ app: XCUIApplication) -> XCUIElement {
+        let top = app.descendants(matching: .any).matching(identifier: "spotRow.top").firstMatch
+        _ = top.waitForExistence(timeout: 10)
+        let row = app.descendants(matching: .any).matching(identifier: "spotRow").element(boundBy: 0)
+        if !row.waitForExistence(timeout: 3) { scrollTo(row, in: app) }
+        return row
+    }
+
     /// Scrolls the main scroll view until `element` is hittable (max 6 swipes).
     static func scrollTo(_ element: XCUIElement, in app: XCUIApplication) {
         var tries = 0
@@ -286,8 +301,13 @@ enum Layout {
                                                    file: StaticString = #filePath, line: UInt = #line) {
         let w = window(app)
         let elements = visible(app.staticTexts, in: app) + visible(app.buttons, in: app)
+        // Horizontal scrollers (Best Now's hour strip) show a peek of the next
+        // item at the edge on purpose; anything inside their band is skipped.
+        let scrollers = app.descendants(matching: .any).matching(identifier: "weather.strip")
+            .allElementsBoundByIndex.filter(\.exists).map(\.frame)
         for e in elements where e.frame.height > 0 {
             let f = e.frame
+            if scrollers.contains(where: { f.minY >= $0.minY - 1 && f.maxY <= $0.maxY + 1 }) { continue }
             if f.minX < w.minX - 1 || f.maxX > w.maxX + 1 {
                 XCTFail("[\(context)] '\(e.label)' runs off screen horizontally: \(f) in \(w)", file: file, line: line)
             }
@@ -363,9 +383,17 @@ enum Layout {
                       file: StaticString = #filePath, line: UInt = #line) {
         settle(app)
         do {
-            try app.performAccessibilityAudit(for: [.textClipped, .hitRegion, .dynamicType, .contrast]) { issue in
+            // No `.dynamicType`: these tests pin the text size with
+            // -UIPreferredContentSizeCategoryName, so the audit's own size
+            // change cannot reach the app and every text is reported. Dynamic
+            // Type is covered by running each screen at three sizes instead.
+            try app.performAccessibilityAudit(for: [.textClipped, .hitRegion, .contrast]) { issue in
                 guard let element = issue.element else { return true }      // nothing to point at
                 if element.elementType == .map { return true }               // MapKit tiles
+                // Paywall rows put "feature, Free: …, Plus: …" on the feature
+                // cell (a GridRow has no element of its own); the audit
+                // compares that longer label with the visible text.
+                if issue.auditType == .textClipped, element.identifier == "plan.row" { return true }
                 if ignoringSystemUI && element.identifier.isEmpty { return true }
                 if issue.auditType == .contrast, issue.compactDescription.localizedCaseInsensitiveContains("nearly") {
                     return true

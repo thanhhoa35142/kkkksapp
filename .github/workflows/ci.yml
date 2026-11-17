@@ -53,9 +53,29 @@ jobs:
             -scheme MyApp \
             -destination "id=$UDID" \
             -configuration Debug \
+            -resultBundlePath build/ios.xcresult \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             test
+
+      # Failure screenshots XCTest takes automatically, for review without a Mac.
+      - name: Export iOS failure screenshots
+        if: ${{ failure() && hashFiles('build/ios.xcresult/Info.plist') != '' }}
+        run: |
+          mkdir -p build/ios-screenshots
+          xcrun xcresulttool export attachments \
+            --path build/ios.xcresult --output-path build/ios-screenshots --only-failures
+          python3 scripts/rename-screenshots.py build/ios-screenshots \
+            || echo "rename failed: keeping the exported file names"
+
+      - name: Upload iOS failure screenshots
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-failure-screenshots
+          path: build/ios-screenshots
+          if-no-files-found: ignore
+          retention-days: 14
 
       # Native Mac app on fixture data (no backend): captures the main screens
       # for review without a Mac. Signing overrides: ci/mac-screenshots.xcconfig.

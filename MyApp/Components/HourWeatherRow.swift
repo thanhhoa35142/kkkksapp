@@ -68,6 +68,10 @@ struct HourWeatherRow: View {
                         Text(item.label)
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                            // "Temperature" in a quarter-width column at
+                            // XXXL: shrink a little rather than truncate.
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityElement(children: .ignore)
