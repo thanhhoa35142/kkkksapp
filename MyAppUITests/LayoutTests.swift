@@ -393,6 +393,11 @@ enum Layout {
     static func audit(_ app: XCUIApplication, _ context: String, ignoringSystemUI: Bool = false,
                       file: StaticString = #filePath, line: UInt = #line) {
         settle(app)
+        // Glass bars (iOS 26 tab bar, navigation bar) float over content;
+        // the audit samples text through the glass and reports black text
+        // as low contrast or clipped. Only judge what is clear of them.
+        let bars = (app.tabBars.allElementsBoundByIndex + app.navigationBars.allElementsBoundByIndex)
+            .filter(\.exists).map(\.frame).filter { !$0.isEmpty }
         do {
             // No `.dynamicType`: these tests pin the text size with
             // -UIPreferredContentSizeCategoryName, so the audit's own size
@@ -401,6 +406,10 @@ enum Layout {
             try app.performAccessibilityAudit(for: [.textClipped, .hitRegion, .contrast]) { issue in
                 guard let element = issue.element else { return true }      // nothing to point at
                 if element.elementType == .map { return true }               // MapKit tiles
+                if issue.auditType == .contrast || issue.auditType == .textClipped,
+                   bars.contains(where: { $0.intersects(element.frame) }) {
+                    return true
+                }
                 // Paywall rows put "feature, Free: …, Plus: …" on the feature
                 // cell (a GridRow has no element of its own); the audit
                 // compares that longer label with the visible text.
