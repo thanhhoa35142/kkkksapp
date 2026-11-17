@@ -28,14 +28,14 @@ enum AppConfig {
     // a URL or address. App Review requires Privacy Policy and Terms of Use
     // links for auto-renewable subscriptions (Guideline 3.1.2).
 
-    /// Privacy policy page, e.g. a page on the product site.
-    static let privacyPolicyURL: URL? = nil
-    /// Terms of Use (EULA). Apple's standard EULA is
-    /// https://www.apple.com/legal/internet-services/itunes/dev/stdeula/
-    /// if the app uses it — set it here explicitly if so.
-    static let termsOfUseURL: URL? = nil
-    /// Address for "Send Feedback" (opens Mail via `mailto:`).
-    static let feedbackEmail: String? = nil
+    /// Privacy policy on the product site (pickhour-web `/privacy`).
+    static let privacyPolicyURL: URL? = URL(string: "https://pickhour.app/privacy")
+    /// Terms of Use on the product site (pickhour-web `/terms`); covers
+    /// the Plus subscription and refers to Apple's standard EULA.
+    static let termsOfUseURL: URL? = URL(string: "https://pickhour.app/terms")
+    /// Address for "Send Feedback" (opens Mail via `mailto:`); the site's
+    /// support address (pickhour-web `site.email.support`).
+    static let feedbackEmail: String? = "support@pickhour.app"
 
     static var feedbackMailURL: URL? {
         guard let feedbackEmail, !feedbackEmail.isEmpty else { return nil }
