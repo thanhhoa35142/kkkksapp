@@ -2677,6 +2677,72 @@
         }
       }
     },
+    "Something went wrong on our side. Try again in a moment." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bei uns ist etwas schiefgelaufen. Versuch es gleich noch einmal."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Algo ha fallado por nuestra parte. Inténtalo en un momento."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Er ging bij ons iets mis. Probeer het zo opnieuw."
+          }
+        }
+      }
+    },
+    "This is taking too long. Try again in a moment." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das dauert zu lange. Versuch es gleich noch einmal."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Está tardando demasiado. Inténtalo en un momento."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dit duurt te lang. Probeer het zo opnieuw."
+          }
+        }
+      }
+    },
+    "You're offline. Check your connection and try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du bist offline. Prüfe deine Verbindung und versuch es noch einmal."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No tienes conexión. Revisa tu conexión e inténtalo de nuevo."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Je bent offline. Controleer je verbinding en probeer het opnieuw."
+          }
+        }
+      }
+    },
     "every %lld days" : {
       "localizations" : {
         "de" : {

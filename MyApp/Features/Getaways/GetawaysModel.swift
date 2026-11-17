@@ -40,7 +40,7 @@ final class GetawaysModel {
             return
         } catch {
             Log.api.error("getaways failed: \(error.localizedDescription)")
-            if list == nil { phase = .failed(error.localizedDescription) }
+            if list == nil { phase = .failed(LoadErrorMessage.text(for: error)) }
         }
     }
 }

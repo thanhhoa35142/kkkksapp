@@ -84,10 +84,11 @@ final class PhoneScreenshotTests: XCTestCase {
         tap(app.tabBars.buttons[label], "\(label) tab", in: app)
     }
 
-    /// Spot Detail of the decision card's spot.
+    /// Spot Detail of the first "More nearby" row (the decision card opens
+    /// the spot at its window hour; a plain row is the common path).
     private func openSpotDetail(_ app: XCUIApplication) {
-        let top = waitForResults(app, "detail")
-        tap(top, "decision card", in: app)
+        waitForResults(app, "detail")
+        tap(Layout.firstPlainRow(app), "first nearby row", in: app)
         if !app.buttons["spotAction.directions"].waitForExistence(timeout: 10) {
             XCTFail("Spot Detail did not open")
         }
@@ -199,7 +200,8 @@ final class PhoneScreenshotTests: XCTestCase {
     func test10WhenMenuAndTimePicker() {
         let app = launch()
         waitForResults(app, "when")
-        if tap(button(app, "Now"), "When menu", in: app) {
+        // The menu's label reads "Time: Now".
+        if tap(button(app, beginningWith: "Time"), "When menu", in: app) {
             capture("18-when-menu")
             if tap(button(app, "Choose a Time…"), "Choose a Time…", in: app) {
                 capture("19-time-picker")
