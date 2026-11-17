@@ -17,7 +17,7 @@ concurrency:
 #   ios (a)       ~15 min  half of the UI tests on a simulator
 #   ios (b)       ~15 min  the other half (and any test added later)
 #   macos         ~5 min   native Mac app: build + screenshots
-#   translations  ~3 min   every extracted string translated (nl, de, es)
+#   translations  ~3 min   every string translated (nl, de, es) + color contrast
 # `xcodebuild test` builds the app itself, so there is no separate build step.
 
 jobs:
@@ -175,3 +175,9 @@ jobs:
             -exportLanguage nl -exportLanguage de -exportLanguage es \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
           python3 scripts/check-translations.py build/loc
+
+      # The app's own colors against every background they are drawn on
+      # (WCAG AA 4.5:1). Replaces the UI-test audit's contrast check.
+      - name: Check color contrast
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check-contrast.py

@@ -58,6 +58,8 @@ final class MacScreenshotTests: XCTestCase {
         if !top.waitForExistence(timeout: 20) {
             XCTFail("[\(context)] Best Now never loaded")
         }
+        // A new window's sidebar can open scrolled past the answer.
+        scrollIntoView(top, in: app)
         settle(2)
         return top
     }
