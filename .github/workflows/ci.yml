@@ -58,8 +58,7 @@ jobs:
             test
 
       # Native Mac app on fixture data (no backend): captures the main screens
-      # for review without a Mac. Ad-hoc signed without entitlements, since
-      # push / associated domains / App Group need a provisioning profile.
+      # for review without a Mac. Signing overrides: ci/mac-screenshots.xcconfig.
       - name: Test macOS (screenshots)
         if: ${{ !cancelled() }}
         run: |
@@ -70,13 +69,7 @@ jobs:
             -configuration Debug \
             -only-testing:MyAppUITests/MacScreenshotTests \
             -resultBundlePath build/mac.xcresult \
-            CODE_SIGN_IDENTITY=- \
-            CODE_SIGN_STYLE=Manual \
-            DEVELOPMENT_TEAM= \
-            PROVISIONING_PROFILE_SPECIFIER= \
-            CODE_SIGN_ENTITLEMENTS= \
-            'CODE_SIGN_ENTITLEMENTS[sdk=macosx*]=' \
-            ENABLE_HARDENED_RUNTIME=NO \
+            -xcconfig ci/mac-screenshots.xcconfig \
             test
 
       - name: Export macOS screenshots
