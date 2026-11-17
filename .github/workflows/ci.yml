@@ -28,13 +28,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Split by measured run time (~12 min of tests each). Group b skips
+          # Split by measured run time (~15 min of tests each; a carries the
+          # ~40 iPhone screenshots). Group b skips
           # group a's tests and runs everything else, so a new test is never
           # left out.
           - group: a
             select: >-
               -only-testing:MyAppUITests/LayoutTests/testOnboardingPrimaryButtonsAtTheBottom
-              -only-testing:MyAppUITests/LayoutTests/testPaywall
               -only-testing:MyAppUITests/LayoutTests/testBestNowAtNight
               -only-testing:MyAppUITests/LayoutTests/testTabBarInThumbZone
               -only-testing:MyAppUITests/MyAppUITests
@@ -42,7 +42,6 @@ jobs:
           - group: b
             select: >-
               -skip-testing:MyAppUITests/LayoutTests/testOnboardingPrimaryButtonsAtTheBottom
-              -skip-testing:MyAppUITests/LayoutTests/testPaywall
               -skip-testing:MyAppUITests/LayoutTests/testBestNowAtNight
               -skip-testing:MyAppUITests/LayoutTests/testTabBarInThumbZone
               -skip-testing:MyAppUITests/MyAppUITests

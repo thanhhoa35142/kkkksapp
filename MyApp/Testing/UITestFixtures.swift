@@ -12,6 +12,8 @@ import SwiftUI
 /// - `-UIPreferredContentSizeCategoryName <category>` → Dynamic Type
 /// - `-UITestLocalHour <0–23>` → the fixture city's local hour at launch (default 10)
 /// - `-UITestAppearance dark|light` → color scheme for screenshots (default: system)
+/// - `-UITestDelay <seconds>` → every response waits this long (loading states)
+/// - `-UITestOffline YES` → every request fails as "not connected to the internet"
 ///
 /// Names are deliberately long/awkward to catch wrapping and truncation.
 enum UITestFixtures {
@@ -32,6 +34,16 @@ enum UITestFixtures {
         case "light": return .light
         default: return nil
         }
+    }
+
+    /// `-UITestDelay`: seconds before each response (0 = immediate).
+    static var responseDelay: TimeInterval {
+        UserDefaults.standard.double(forKey: "UITestDelay")
+    }
+
+    /// `-UITestOffline YES`: requests fail the way they do without a network.
+    static var isOffline: Bool {
+        UserDefaults.standard.bool(forKey: "UITestOffline")
     }
 
     static var isPlus: Bool {
@@ -353,7 +365,24 @@ final class FixtureURLProtocol: URLProtocol {
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
+    private let lock = NSLock()
+    private var stopped = false
+
     override func startLoading() {
+        let delay = UITestFixtures.responseDelay
+        guard delay > 0 else { return answer() }
+        DispatchQueue.global().asyncAfter(deadline: .now() + delay) { [weak self] in self?.answer() }
+    }
+
+    private func answer() {
+        lock.lock()
+        let isStopped = stopped
+        lock.unlock()
+        guard !isStopped else { return }
+        if UITestFixtures.isOffline {
+            client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
+            return
+        }
         let (status, body) = UITestFixtures.response(for: request)
         let url = request.url ?? URL(string: "about:blank")!
         let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1",
@@ -363,5 +392,9 @@ final class FixtureURLProtocol: URLProtocol {
         client?.urlProtocolDidFinishLoading(self)
     }
 
-    override func stopLoading() {}
+    override func stopLoading() {
+        lock.lock()
+        stopped = true
+        lock.unlock()
+    }
 }

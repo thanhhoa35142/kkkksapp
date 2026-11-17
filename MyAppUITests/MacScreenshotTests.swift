@@ -13,7 +13,7 @@ final class MacScreenshotTests: XCTestCase {
     }
 
     private func launch(plan: String = "free", localHour: Int = 10, language: String = "en",
-                        dark: Bool = false) -> XCUIApplication {
+                        dark: Bool = false, extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         let locales = ["en": "en_US", "nl": "nl_NL", "de": "de_DE", "es": "es_ES"]
         app.launchArguments = [
@@ -29,7 +29,7 @@ final class MacScreenshotTests: XCTestCase {
             // size on every launch (a restored "no windows" state opens none).
             "-NSQuitAlwaysKeepsWindows", "NO",
             "-ApplePersistenceIgnoreState", "YES",
-        ]
+        ] + extra
         app.launch()
         app.activate()
         ensureMainWindow(app)
@@ -204,6 +204,22 @@ final class MacScreenshotTests: XCTestCase {
             }
             if element.isHittable { return }
         }
+    }
+
+    /// Responses held back 30 s: the sidebar while Best Now loads.
+    func test10Loading() {
+        let app = launch(extra: ["-UITestDelay", "30"])
+        settle(4)
+        capture(app, "11-loading")
+        app.terminate()
+    }
+
+    /// Every request fails as "not connected to the internet".
+    func test11Offline() {
+        let app = launch(extra: ["-UITestOffline", "YES"])
+        settle(8)
+        capture(app, "12-offline")
+        app.terminate()
     }
 
     func test07German() {
