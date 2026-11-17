@@ -241,8 +241,11 @@ final class LayoutTests: XCTestCase {
             Layout.assertNothingOffScreenHorizontally(app, "\(size) Welcome")
             Layout.audit(app, "\(size) Welcome")
 
+            // Right after the audit a tap can land before the screen takes
+            // input again (seen once at XXXL): retry once, then judge.
             next.tap()
             let city = app.buttons["Choose a City"]
+            if !city.waitForExistence(timeout: 3), next.exists, next.isHittable { next.tap() }
             XCTAssertTrue(city.waitForExistence(timeout: 5), "[\(size)] Where step not shown")
             Layout.assertEqualWidths([app.buttons["Use My Location"], city], tolerance: 1.5, "\(size) Where buttons")
             Layout.assertNothingOffScreenHorizontally(app, "\(size) Where")
