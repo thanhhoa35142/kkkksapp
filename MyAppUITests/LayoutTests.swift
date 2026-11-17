@@ -58,6 +58,14 @@ final class LayoutTests: XCTestCase {
                 continue
             }
 
+            // Mid-morning fixture: the top spot is good from now on, so the
+            // decision card ("Best plan · Now") must replace the plain top
+            // pick. Both carry spotRow.top; only the card has this header.
+            if size == .standard {
+                let plan = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH[c] %@", "Best plan")).firstMatch
+                XCTAssertTrue(plan.waitForExistence(timeout: 5), "Best Now shows no decision card at 10 AM")
+            }
+
             Layout.assertNothingOffScreenHorizontally(app, "\(size) Best Now")
             let visibleRows = Layout.outermost(Layout.visible(rows, in: app))
             Layout.assertNoOverlap([top] + visibleRows, "\(size) Best Now rows")
@@ -75,14 +83,12 @@ final class LayoutTests: XCTestCase {
     /// later window exists: the card says when to go ("Next good time").
     /// Fixture at 2 AM: every spot is dark now, tomorrow from 08:00 scores 70+.
     func testBestNowAtNight() throws {
-        // Known failing: CI run 43989031591 (01:47 local) showed "It's dark
-        // out", though DecisionPlanner on the same fixture hours returns
-        // tomorrow 13:47–17:47. The decision is lost in BestNowModel's load
-        // path. Non-strict so it reports without blocking; remove once fixed.
-        XCTExpectFailure("Night decision card missing — BestNowModel load path", strict: false)
         let app = launch(.standard, localHour: 2)
-        let top = app.descendants(matching: .any).matching(identifier: "spotRow.top").firstMatch
-        XCTAssertTrue(top.waitForExistence(timeout: 10),
+        // The card header is the proof a decision exists (the plain top pick
+        // also carries spotRow.top).
+        // Case-insensitive: grouped-list headers may render uppercased.
+        let next = app.staticTexts.matching(NSPredicate(format: "label ==[c] %@", "Next good time")).firstMatch
+        XCTAssertTrue(next.waitForExistence(timeout: 10),
                       "At 2 AM Best Now shows no Next good time card (decision missing)")
         XCTAssertFalse(app.staticTexts["It's dark out"].exists,
                        "\"It's dark out\" dead end although a later window exists")

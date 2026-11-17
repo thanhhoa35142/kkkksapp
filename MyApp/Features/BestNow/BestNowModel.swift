@@ -83,33 +83,50 @@ final class BestNowModel {
     /// True when the Free cap may be hiding more results.
     var mayHaveMore = false
 
+    /// Bumped by every `load`. `.task(id:)` cancels the previous load when the
+    /// reload key changes, but cancellation is cooperative: a superseded load
+    /// can still get its response after the newer one finished, then reset
+    /// `decision` and fail its own (cancelled) hours request — leaving
+    /// "It's dark out" at night, or a plain top pick by day. Only the latest
+    /// load may write state.
+    @ObservationIgnored private var generation = 0
+
+    private func isCurrent(_ gen: Int) -> Bool {
+        gen == generation && !Task.isCancelled
+    }
+
     /// `forceWeather`: pull to refresh also reloads the forecast.
     func load(app: AppState, forceWeather: Bool = false) async {
+        generation += 1
+        let gen = generation
         guard app.place != nil else {
             phase = .needsPlace
             return
         }
         if items.isEmpty { phase = .loading } else { isRefreshing = true }
-        defer { isRefreshing = false }
+        defer { if gen == generation { isRefreshing = false } }
         guard let coordinate = await app.placeCoordinate() else {
-            phase = .needsPlace
+            if isCurrent(gen) { phase = .needsPlace }
             return
         }
+        guard isCurrent(gen) else { return }
         // The forecast runs beside the spots, so the rows never wait for it.
         let lat = coordinate.latitude, lng = coordinate.longitude
         async let weatherDone: Void = loadWeather(lat: lat, lng: lng, force: forceWeather)
-        await loadSpots(app: app, lat: lat, lng: lng)
-        isRefreshing = false
+        await loadSpots(app: app, lat: lat, lng: lng, gen: gen)
+        if gen == generation { isRefreshing = false }
         await weatherDone
+        guard isCurrent(gen) else { return }
         await loadWeekendHint(app: app)
     }
 
-    private func loadSpots(app: AppState, lat: Double, lng: Double) async {
+    private func loadSpots(app: AppState, lat: Double, lng: Double, gen: Int) async {
         let limit = app.isPlus ? Self.plusLimit : Self.freeLimit
         do {
             let list = try await AppConfig.apiClient.recommendations(
                 lat: lat, lon: lng,
                 radiusM: Self.radiusM, when: app.when.apiDate, limit: limit, filters: app.filters)
+            guard isCurrent(gen) else { return }
             items = list.items.map(SpotSummary.init)
             outlooks = [:]
             decision = nil
@@ -126,10 +143,13 @@ final class BestNowModel {
             }
             // Keep the rows dimmed until their time lines arrive, so the
             // swap (rows + lines) happens in one step.
-            await loadOutlooks(from: app.when.resolved, isPlus: app.isPlus)
+            await loadOutlooks(from: app.when.resolved, isPlus: app.isPlus, gen: gen)
         } catch is CancellationError {
             return
+        } catch let error as URLError where error.code == .cancelled {
+            return
         } catch {
+            guard isCurrent(gen) else { return }
             // Keep stale rows visible when we have them (offline state).
             phase = items.isEmpty ? .failed(error.localizedDescription) : .loaded
             Log.api.error("recommendations failed: \(error.localizedDescription)")
@@ -158,12 +178,13 @@ final class BestNowModel {
 
     /// Hourly scores for the listed spots (one batch call), turned into the
     /// row's time line. Free: never past tomorrow (`HourWindow`).
-    private func loadOutlooks(from: Date, isPlus: Bool) async {
+    private func loadOutlooks(from: Date, isPlus: Bool, gen: Int) async {
         let hours = HourWindow.hours(from: from, isPlus: isPlus, maxHours: Self.decisionHours)
         let ids = items.map(\.id)
         guard hours >= 2, !ids.isEmpty else { return }
         do {
             let collection = try await AppConfig.apiClient.spots(ids: ids, from: from, hours: hours)
+            guard isCurrent(gen) else { return }
             var result: [UUID: HourOutlook] = [:]
             var series: [UUID: [ScoredHour]] = [:]
             for feature in collection.features {
@@ -185,6 +206,8 @@ final class BestNowModel {
             decision = DecisionPlanner.decide(candidates, from: from)
             decisionFrom = from
         } catch is CancellationError {
+            return
+        } catch let error as URLError where error.code == .cancelled {
             return
         } catch {
             Log.api.error("best now hours failed: \(error.localizedDescription)")
