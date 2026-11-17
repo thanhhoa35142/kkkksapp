@@ -22,8 +22,9 @@ final class MacScreenshotTests: XCTestCase {
             "-UITestLocalHour", String(localHour),
             "-onboardingDone", "YES",
             "-AppleLanguages", "(\(language))", "-AppleLocale", locales[language] ?? "en_US",
-            // Per-app appearance; the runner itself stays in light mode.
-            "-AppleInterfaceStyle", dark ? "Dark" : "Light",
+            // Per-app appearance (AppDelegate applies it in fixture mode);
+            // the runner itself stays in light mode.
+            "-UITestAppearance", dark ? "dark" : "light",
             // No window restoration: a fresh window at the scene's default
             // size on every launch (a restored "no windows" state opens none).
             "-NSQuitAlwaysKeepsWindows", "NO",
@@ -172,9 +173,10 @@ final class MacScreenshotTests: XCTestCase {
         app.terminate()
     }
 
-    /// Week plan for the saved spots (fixture favorites), lower in the sidebar.
+    /// Week plan for the saved spots (fixture favorites), lower in the
+    /// sidebar. Plus: on Free the section is a locked "See the best times".
     func test09WeekPlan() {
-        let app = launch()
+        let app = launch(plan: "plus")
         waitForResults(app, "week plan")
         let row = app.descendants(matching: .any).matching(identifier: "planRow").firstMatch
         if !row.waitForExistence(timeout: 10) {

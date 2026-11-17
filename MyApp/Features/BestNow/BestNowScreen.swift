@@ -342,9 +342,12 @@ struct DecisionSection: View {
     private var summary: some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
+                // Explicit limits: a Mac sidebar row truncates to one line
+                // by default ("Today · Vondelpark · 10 AM–…").
                 Text(verbatim: sentence)
                     .font(.headline)
                     .monospacedDigit()
+                    .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(spot.subtitle)
                     .font(.subheadline)
@@ -353,6 +356,7 @@ struct DecisionSection: View {
                     Text(verbatim: reasonText)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                        .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
