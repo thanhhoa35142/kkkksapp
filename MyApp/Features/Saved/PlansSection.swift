@@ -1,3 +1,6 @@
+import SwiftData
+import SwiftUI
+
 /// Saved › Plans — picnics the user planned (stored on device), then plans
 /// shared with the user that they follow (C2, from the server). Each row
 /// shows how the window looks now; tapping one opens the plan sheet.
