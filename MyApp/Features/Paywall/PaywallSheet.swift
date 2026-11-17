@@ -162,14 +162,18 @@ struct PaywallSheet: View {
                 .appAccountToken(DeviceIdentity.deviceID),
             ])
             switch result {
-            case .success(.verified(let transaction)):
-                await app.link(signedTransaction: transaction.jwsRepresentation)
+            case .success(let verification):
+                // The signed JWS lives on the VerificationResult, not on the
+                // decoded Transaction.
+                guard case .verified(let transaction) = verification else {
+                    notice = String(localized: "Purchase could not be verified. Try again or contact support.")
+                    break
+                }
+                await app.link(signedTransaction: verification.jwsRepresentation)
                 await transaction.finish()
                 app.paywallDidPurchase()
                 app.track("plus_purchased", ["reason": .string(reason.rawValue)])
                 dismiss()
-            case .success(.unverified):
-                notice = String(localized: "Purchase could not be verified. Try again or contact support.")
             case .userCancelled:
                 break
             case .pending:
