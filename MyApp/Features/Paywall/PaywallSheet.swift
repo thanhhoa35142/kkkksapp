@@ -67,14 +67,10 @@ struct PaywallSheet: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
-            HStack(spacing: 16) {
-                Button("Restore purchases") { Task { await app.restorePurchases() } }
-                if let url = AppConfig.privacyPolicyURL {
-                    Link("Privacy Policy", destination: url)
-                }
-                if let url = AppConfig.termsOfUseURL {
-                    Link("Terms of Use", destination: url)
-                }
+            // One line when it fits; stacked at large text sizes.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 16) { footerLinks }
+                VStack(alignment: .leading, spacing: 8) { footerLinks }
             }
             .font(.footnote)
             Text("Cancel anytime in Settings. Works on iPhone, iPad and Mac.")
@@ -183,6 +179,19 @@ struct PaywallSheet: View {
             }
         } catch {
             notice = error.localizedDescription
+        }
+    }
+
+    /// Restore + the policy links App Review requires next to a subscription
+    /// offer (Guideline 3.1.2).
+    @ViewBuilder
+    private var footerLinks: some View {
+        Button("Restore purchases") { Task { await app.restorePurchases() } }
+        if let url = AppConfig.privacyPolicyURL {
+            Link("Privacy Policy", destination: url)
+        }
+        if let url = AppConfig.termsOfUseURL {
+            Link("Terms of Use", destination: url)
         }
     }
 }
