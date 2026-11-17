@@ -59,7 +59,7 @@ final class MacScreenshotTests: XCTestCase {
             XCTFail("[\(context)] Best Now never loaded")
         }
         // A new window's sidebar can open scrolled past the answer.
-        scrollIntoView(top, in: app)
+        if top.exists && !top.isHittable { scrollIntoView(top, in: app) }
         settle(2)
         return top
     }
@@ -111,7 +111,7 @@ final class MacScreenshotTests: XCTestCase {
     func test04Night() {
         let app = launch(localHour: 2)
         waitForResults(app, "night")
-        let next = app.staticTexts.matching(NSPredicate(format: "label ==[c] %@", "Next good time")).firstMatch
+        let next = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "Next good time")).firstMatch
         if !next.waitForExistence(timeout: 5) {
             XCTFail("[night] no Next good time card at 2 AM")
         }

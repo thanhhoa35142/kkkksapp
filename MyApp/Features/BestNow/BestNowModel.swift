@@ -151,7 +151,7 @@ final class BestNowModel {
         } catch {
             guard isCurrent(gen) else { return }
             // Keep stale rows visible when we have them (offline state).
-            phase = items.isEmpty ? .failed(error.localizedDescription) : .loaded
+            phase = items.isEmpty ? .failed(LoadErrorMessage.text(for: error)) : .loaded
             Log.api.error("recommendations failed: \(error.localizedDescription)")
         }
     }

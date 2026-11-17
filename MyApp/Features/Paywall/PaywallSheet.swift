@@ -242,9 +242,11 @@ private struct PlanComparison: View {
                 // whole row; the value cells are folded into its label.
                 GridRow {
                     Text(row.feature)
+                        .fixedSize(horizontal: false, vertical: true)
                         .accessibilityLabel(Text("\(row.feature), Free: \(row.free ?? String(localized: "not included")), Plus: \(row.plus)"))
                         .accessibilityIdentifier("plan.row")
                     Text(row.free ?? "—")
+                        .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(.secondary)
                         .accessibilityHidden(true)
                     Text(row.plus)

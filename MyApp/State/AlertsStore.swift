@@ -64,7 +64,7 @@ final class AlertsStore {
         } catch let error as APIError where error.code == "plan_limit" {
             return .needsPlus
         } catch {
-            return .failed(error.localizedDescription)
+            return .failed(LoadErrorMessage.text(for: error))
         }
     }
 
