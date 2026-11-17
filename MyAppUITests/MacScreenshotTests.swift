@@ -22,8 +22,8 @@ final class MacScreenshotTests: XCTestCase {
             "-UITestLocalHour", String(localHour),
             "-onboardingDone", "YES",
             "-AppleLanguages", "(\(language))", "-AppleLocale", locales[language] ?? "en_US",
-            // Per-app appearance (AppDelegate applies it in fixture mode);
-            // the runner itself stays in light mode.
+            // Fixture mode applies it as the preferred color scheme; the
+            // runner itself stays in light mode.
             "-UITestAppearance", dark ? "dark" : "light",
             // No window restoration: a fresh window at the scene's default
             // size on every launch (a restored "no windows" state opens none).
@@ -58,6 +58,8 @@ final class MacScreenshotTests: XCTestCase {
         if !top.waitForExistence(timeout: 20) {
             XCTFail("[\(context)] Best Now never loaded")
         }
+        // A new window's sidebar can open scrolled past the answer.
+        scrollIntoView(top, in: app)
         settle(2)
         return top
     }

@@ -398,8 +398,8 @@ enum Layout {
                       file: StaticString = #filePath, line: UInt = #line) {
         settle(app)
         // Glass bars (iOS 26 tab bar, navigation bar) float over content;
-        // the audit samples text through the glass and reports black text
-        // as low contrast or clipped. Only judge what is clear of them.
+        // text passing under them reads as clipped. Only judge what is
+        // clear of them.
         let bars = (app.tabBars.allElementsBoundByIndex + app.navigationBars.allElementsBoundByIndex)
             .filter(\.exists).map(\.frame).filter { !$0.isEmpty }
         do {
@@ -407,10 +407,20 @@ enum Layout {
             // -UIPreferredContentSizeCategoryName, so the audit's own size
             // change cannot reach the app and every text is reported. Dynamic
             // Type is covered by running each screen at three sizes instead.
-            try app.performAccessibilityAudit(for: [.textClipped, .hitRegion, .contrast]) { issue in
+            // No `.contrast`: on iOS 26 it samples through glass bars and
+            // flags Apple's own secondary label colors. The app's own colors
+            // are checked exactly by scripts/check-contrast.py (CI).
+            try app.performAccessibilityAudit(for: [.textClipped, .hitRegion]) { issue in
                 guard let element = issue.element else { return true }      // nothing to point at
                 if element.elementType == .map { return true }               // MapKit tiles
-                if issue.auditType == .contrast || issue.auditType == .textClipped,
+                // Predictive "may be clipped at larger Dynamic Type sizes":
+                // like `.dynamicType`, the pinned text size stops the audit
+                // from checking it for real; each screen runs at three sizes.
+                if issue.auditType == .textClipped,
+                   issue.compactDescription.localizedCaseInsensitiveContains("larger Dynamic Type") {
+                    return true
+                }
+                if issue.auditType == .textClipped,
                    bars.contains(where: { $0.intersects(element.frame) }) {
                     return true
                 }
@@ -419,9 +429,6 @@ enum Layout {
                 // compares that longer label with the visible text.
                 if issue.auditType == .textClipped, element.identifier == "plan.row" { return true }
                 if ignoringSystemUI && element.identifier.isEmpty { return true }
-                if issue.auditType == .contrast, issue.compactDescription.localizedCaseInsensitiveContains("nearly") {
-                    return true
-                }
                 if issue.auditType == .dynamicType, Int(element.label.trimmingCharacters(in: .whitespaces)) != nil {
                     return true
                 }

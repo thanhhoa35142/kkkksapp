@@ -25,6 +25,7 @@ struct MyAppApp: App {
         WindowGroup {
             ContentView()
                 .environment(appState)
+                .preferredColorScheme(UITestFixtures.colorScheme)
                 .task { await appState.bootstrap() }
                 #if os(macOS)
                 // UI_SPEC §10.4: Mac window minimum 960×640.
@@ -42,6 +43,7 @@ struct MyAppApp: App {
         Settings {
             NavigationStack { SettingsScreen() }
                 .environment(appState)
+                .preferredColorScheme(UITestFixtures.colorScheme)
                 .frame(width: 520, height: 620)
         }
         .modelContainer(Self.modelContainer)

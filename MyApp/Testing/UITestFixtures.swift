@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import SwiftUI
 
 /// UI-test mode: launch with `-UITestFixtures` and every API call is answered
 /// from the canned data below, so layout tests run on CI without a backend.
@@ -10,6 +11,7 @@ import SwiftData
 /// - `-onboardingDone YES` → skip onboarding (plain UserDefaults argument)
 /// - `-UIPreferredContentSizeCategoryName <category>` → Dynamic Type
 /// - `-UITestLocalHour <0–23>` → the fixture city's local hour at launch (default 10)
+/// - `-UITestAppearance dark|light` → color scheme for screenshots (default: system)
 ///
 /// Names are deliberately long/awkward to catch wrapping and truncation.
 enum UITestFixtures {
@@ -20,6 +22,17 @@ enum UITestFixtures {
     #else
     static let isActive = false
     #endif
+
+    /// `-UITestAppearance`: a fixed color scheme for screenshot runs. nil =
+    /// follow the system (always, outside fixture mode).
+    static var colorScheme: ColorScheme? {
+        guard isActive else { return nil }
+        switch UserDefaults.standard.string(forKey: "UITestAppearance") {
+        case "dark": return .dark
+        case "light": return .light
+        default: return nil
+        }
+    }
 
     static var isPlus: Bool {
         UserDefaults.standard.string(forKey: "UITestPlan") == "plus"

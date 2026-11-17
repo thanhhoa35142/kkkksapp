@@ -17,7 +17,7 @@ concurrency:
 #   ios (a)       ~15 min  half of the UI tests on a simulator
 #   ios (b)       ~15 min  the other half (and any test added later)
 #   macos         ~5 min   native Mac app: build + screenshots
-#   translations  ~3 min   every extracted string translated (nl, de, es)
+#   translations  ~3 min   every string translated (nl, de, es) + color contrast
 # `xcodebuild test` builds the app itself, so there is no separate build step.
 
 jobs:
@@ -38,6 +38,7 @@ jobs:
               -only-testing:MyAppUITests/LayoutTests/testBestNowAtNight
               -only-testing:MyAppUITests/LayoutTests/testTabBarInThumbZone
               -only-testing:MyAppUITests/MyAppUITests
+              -only-testing:MyAppUITests/PhoneScreenshotTests
           - group: b
             select: >-
               -skip-testing:MyAppUITests/LayoutTests/testOnboardingPrimaryButtonsAtTheBottom
@@ -46,6 +47,7 @@ jobs:
               -skip-testing:MyAppUITests/LayoutTests/testTabBarInThumbZone
               -skip-testing:MyAppUITests/MyAppUITests
               -skip-testing:MyAppUITests/MacScreenshotTests
+              -skip-testing:MyAppUITests/PhoneScreenshotTests
     steps:
       - uses: actions/checkout@v4
 
@@ -71,6 +73,25 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             test
+
+      # Group a: the iPhone screens (PhoneScreenshotTests, named "NN-...").
+      - name: Export screenshots
+        if: ${{ !cancelled() && matrix.group == 'a' && hashFiles('build/ios.xcresult/Info.plist') != '' }}
+        run: |
+          mkdir -p build/ios-all
+          xcrun xcresulttool export attachments \
+            --path build/ios.xcresult --output-path build/ios-all
+          python3 scripts/rename-screenshots.py build/ios-all \
+            || echo "rename failed: keeping the exported file names"
+
+      - name: Upload screenshots
+        if: ${{ !cancelled() && matrix.group == 'a' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-screenshots
+          path: build/ios-all/[0-9][0-9]-*.png
+          if-no-files-found: warn
+          retention-days: 14
 
       # A screenshot per failure (LayoutTests.record), for review without a Mac.
       - name: Export failure screenshots
@@ -154,3 +175,9 @@ jobs:
             -exportLanguage nl -exportLanguage de -exportLanguage es \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
           python3 scripts/check-translations.py build/loc
+
+      # The app's own colors against every background they are drawn on
+      # (WCAG AA 4.5:1). Replaces the UI-test audit's contrast check.
+      - name: Check color contrast
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check-contrast.py

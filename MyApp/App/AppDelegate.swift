@@ -35,11 +35,6 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
-        // UI tests only: `-UITestAppearance dark`. The -AppleInterfaceStyle
-        // argument does not reach a Mac app, which follows the system.
-        if UITestFixtures.isActive, let style = UserDefaults.standard.string(forKey: "UITestAppearance") {
-            NSApp.appearance = NSAppearance(named: style == "dark" ? .darkAqua : .aqua)
-        }
     }
 
     func application(

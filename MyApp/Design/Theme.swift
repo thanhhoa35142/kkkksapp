@@ -15,9 +15,11 @@ typealias PlatformColor = NSColor
 
 extension Color {
     /// Meadow — tint, primary actions, Great/Good tiers, park outlines.
+    /// Light #276B43 (≥ 4.5:1 on white, grouped background, MeadowSoft and
+    /// a bordered button's fill; scripts/check-contrast.py), dark #5DC983.
     static let brand = Color("AccentColor")
     /// Light Meadow wash behind the score number / selected state.
-    /// Only for large or bold text on top (contrast ≈ 4.4:1 in light mode).
+    /// Meadow text on it: ≈ 5.6:1 in light mode.
     static let brandSoft = Color("MeadowSoft")
 
     /// The grouped list's own background (behind a pinned header over a List).
