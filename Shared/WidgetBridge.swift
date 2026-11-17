@@ -4,7 +4,7 @@ import Foundation
 enum WidgetBridge {
     /// Must match `com.apple.security.application-groups` in the app's and
     /// the widget's entitlements (rename together with the bundle ID).
-    static let appGroup = "group.com.example.MyApp"
+    static let appGroup = "group.app.pickhour"
     static let bestNowKind = "BestNowWidget"
 
     struct Snapshot: Codable, Equatable {
