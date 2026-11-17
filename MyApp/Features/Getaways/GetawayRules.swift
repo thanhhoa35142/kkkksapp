@@ -268,15 +268,15 @@ enum GetawayRules {
         return city.timeZone.secondsFromGMT(for: instant) != deviceTimeZone.secondsFromGMT(for: instant)
     }
 
-    /// "Sat 71 · Sun 86" (weather scores); "–" for a day without a window.
-    /// nil for a single day, where the row's weather line says it.
+    /// "Sat 71 · Sun 86" (weather scores). A day without a good window is
+    /// left out rather than shown as "–", which read as missing data.
+    /// nil for a single day or no scored day; the row then shows the
+    /// city's weather score alone.
     static func dayScoresLine(_ city: Getaway) -> String? {
         guard city.dayScores.count > 1 else { return nil }
-        var parts: [String] = []
-        for entry in city.dayScores {
-            let score = entry.weatherScore.map { String($0) } ?? "–"
-            parts.append("\(entry.date.weekdayLabel) \(score)")
+        let parts = city.dayScores.compactMap { entry in
+            entry.weatherScore.map { "\(entry.date.weekdayLabel) \($0)" }
         }
-        return parts.joined(separator: " · ")
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }
