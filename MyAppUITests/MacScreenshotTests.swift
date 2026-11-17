@@ -24,12 +24,29 @@ final class MacScreenshotTests: XCTestCase {
             "-AppleLanguages", "(\(language))", "-AppleLocale", locales[language] ?? "en_US",
             // Per-app appearance; the runner itself stays in light mode.
             "-AppleInterfaceStyle", dark ? "Dark" : "Light",
-            // Open at the scene's default size, not a restored one.
+            // No window restoration: a fresh window at the scene's default
+            // size on every launch (a restored "no windows" state opens none).
             "-NSQuitAlwaysKeepsWindows", "NO",
+            "-ApplePersistenceIgnoreState", "YES",
         ]
         app.launch()
         app.activate()
+        ensureMainWindow(app)
         return app
+    }
+
+    /// A Mac launch must show the main window. If it does not, that is
+    /// reported, and File › New Window (⌘N) opens one so the screens still
+    /// get captured.
+    private func ensureMainWindow(_ app: XCUIApplication) {
+        let main = app.windows.matching(NSPredicate(format: "title != %@", "Settings")).firstMatch
+        if main.waitForExistence(timeout: 8) { return }
+        XCTFail("no main window after launch (windows: \(app.windows.count)); opening one with ⌘N")
+        app.typeKey("n", modifierFlags: .command)
+        if !main.waitForExistence(timeout: 8) {
+            XCTFail("⌘N opened no window either")
+            add(XCTAttachment(string: app.debugDescription))
+        }
     }
 
     /// Waits for the Best Now answer (decision card or top pick), then a
