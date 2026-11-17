@@ -52,41 +52,96 @@ struct WhenPickerSheet: View {
         return date <= Date.now.startOfHour ? .now : .at(date)
     }
 
-    var body: some View {
-        NavigationStack {
-            Form {
-                DatePicker("Day", selection: $day, in: range, displayedComponents: .date)
-                    .datePickerStyle(.graphical)
-                Picker("Hour", selection: $hour) {
-                    ForEach(0..<24, id: \.self) { h in
-                        let date = Calendar.current.date(bySettingHour: h, minute: 0, second: 0, of: day) ?? day
-                        Text(Format.hour(date)).tag(h)
-                    }
-                }
-                if selection.needsPlus() && !app.isPlus {
-                    Section {
-                        Label("Hourly scores after tomorrow need Plus", systemImage: "lock.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-            .formStyle(.grouped)
-            .navigationTitle("Choose a Time")
-            .inlineTitle()
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        dismiss()
-                        app.select(when: selection)
-                    }
-                }
+    /// The 7 days on offer, as start-of-day dates.
+    private var days: [Date] {
+        (0..<7).compactMap { Calendar.current.date(byAdding: .day, value: $0, to: range.lowerBound) }
+    }
+
+    private func dayLabel(_ date: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) { return String(localized: "Today") }
+        if calendar.isDateInTomorrow(date) { return String(localized: "Tomorrow") }
+        return date.formatted(.dateTime.weekday(.abbreviated).day())
+    }
+
+    private var hourPicker: some View {
+        Picker("Hour", selection: $hour) {
+            ForEach(0..<24, id: \.self) { h in
+                let date = Calendar.current.date(bySettingHour: h, minute: 0, second: 0, of: day) ?? day
+                Text(Format.hour(date)).tag(h)
             }
         }
-        .presentationDetents([.large])
     }
+
+    private var plusNote: some View {
+        Label("Hourly scores after tomorrow need Plus", systemImage: "lock.fill")
+            .foregroundStyle(.secondary)
+    }
+
+    var body: some View {
+        NavigationStack {
+            content
+                .navigationTitle("Choose a Time")
+                .inlineTitle()
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { dismiss() }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") {
+                            dismiss()
+                            app.select(when: selection)
+                        }
+                    }
+                }
+        }
+        #if os(iOS)
+        // Half height: the wheels sit in thumb reach, no empty space below.
+        .presentationDetents([.medium])
+        #else
+        .presentationDetents([.large])
+        #endif
+    }
+
+    #if os(iOS)
+    /// Day | Hour wheels side by side, like the system's date-and-time
+    /// wheels. Only 7 days are on offer, so a month calendar (mostly
+    /// disabled dates, high on the screen) is not needed.
+    private var content: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 0) {
+                Picker("Day", selection: $day) {
+                    ForEach(days, id: \.self) { date in
+                        Text(dayLabel(date)).tag(date)
+                    }
+                }
+                hourPicker
+            }
+            .pickerStyle(.wheel)
+            .labelsHidden()
+            if selection.needsPlus() && !app.isPlus {
+                plusNote.font(.footnote)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal)
+        .frame(maxWidth: .infinity)
+        .background(Color.groupedBackground)
+    }
+    #else
+    /// Mac: the month calendar suits a pointer.
+    private var content: some View {
+        Form {
+            DatePicker("Day", selection: $day, in: range, displayedComponents: .date)
+                .datePickerStyle(.graphical)
+            hourPicker
+            if selection.needsPlus() && !app.isPlus {
+                Section { plusNote }
+            }
+        }
+        .formStyle(.grouped)
+    }
+    #endif
 }
 
 /// Toolbar menu: where Best Now looks.
