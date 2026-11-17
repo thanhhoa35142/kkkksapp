@@ -62,13 +62,19 @@ struct BestNowRows: View {
     @Environment(AppState.self) private var app
 
     var body: some View {
+        phaseSections
+    }
+
+    /// Weather sits right under the answer (the decision card or top pick):
+    /// the answer comes first, the weather explains it.
+    @ViewBuilder
+    private var weatherSection: some View {
         if showsWeather {
             NearbyWeatherSection(points: model.weather, placeName: placeName, when: app.when.resolved,
                                  timeZone: weatherTimeZone)
                 .opacity(model.isRefreshing ? 0.4 : 1)
                 .animation(.easeInOut(duration: 0.2), value: model.isRefreshing)
         }
-        phaseSections
     }
 
     /// Weather rides along with rows that are on screen: not on the first-run
@@ -106,6 +112,7 @@ struct BestNowRows: View {
                         .redacted(reason: .placeholder)
                 }
             }
+            weatherSection
         case .needsPlace:
             Section {
                 ChoosePlaceRows(showCityPicker: $showCityPicker)
@@ -146,6 +153,7 @@ struct BestNowRows: View {
                 Text("Top pick · \(app.when.label)")
             }
         }
+        weatherSection
         if hasMore {
             Section {
                 ForEach(rest) { spot in

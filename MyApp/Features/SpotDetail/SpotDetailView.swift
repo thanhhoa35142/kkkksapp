@@ -179,6 +179,9 @@ struct SpotDetailView: View {
                     .foregroundStyle(.secondary)
             }
             .padding(.vertical, 4)
+            // Right under the name, as in Apple Maps: the main action is on
+            // screen without scrolling past the map and the score card.
+            actionButtons
         }
     }
 
@@ -239,9 +242,6 @@ struct SpotDetailView: View {
             }
             if let score, activePoint != nil {
                 Button("Why \(score)?") { showBreakdown = true }
-            }
-            if context != .mapSheet {
-                actionButtons
             }
         }
     }

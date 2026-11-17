@@ -157,8 +157,9 @@ final class LayoutTests: XCTestCase {
                 // Stacked: same width, one under the other.
                 Layout.assertEqualWidths(actions, tolerance: 1.5, "\(size) action buttons (stacked)")
             } else {
-                // Directions is the one prominent action: clearly wider than Alert.
-                XCTAssertGreaterThan(directions.frame.width, alert.frame.width * 1.3,
+                // Directions is the one prominent action: wider than Alert
+                // (which reads "Edit Alert" once an alert exists).
+                XCTAssertGreaterThan(directions.frame.width, alert.frame.width,
                                      "[\(size)] Directions should dominate the action row")
                 // Thumb reach: the main action is on screen without scrolling,
                 // and not crammed into the top bar area.
