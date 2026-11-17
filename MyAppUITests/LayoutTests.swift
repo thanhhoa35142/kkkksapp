@@ -416,8 +416,11 @@ enum Layout {
                 // Predictive "may be clipped at larger Dynamic Type sizes":
                 // like `.dynamicType`, the pinned text size stops the audit
                 // from checking it for real; each screen runs at three sizes.
+                // The phrase is in the detailed description only ("Text of
+                // this … may be clipped at larger Dynamic Type sizes").
                 if issue.auditType == .textClipped,
-                   issue.compactDescription.localizedCaseInsensitiveContains("larger Dynamic Type") {
+                   (issue.compactDescription + " " + issue.detailedDescription)
+                       .localizedCaseInsensitiveContains("larger Dynamic Type") {
                     return true
                 }
                 if issue.auditType == .textClipped,
