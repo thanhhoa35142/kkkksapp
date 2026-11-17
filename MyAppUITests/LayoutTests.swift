@@ -410,6 +410,13 @@ enum Layout {
             try app.performAccessibilityAudit(for: [.textClipped, .hitRegion, .contrast]) { issue in
                 guard let element = issue.element else { return true }      // nothing to point at
                 if element.elementType == .map { return true }               // MapKit tiles
+                // Predictive "may be clipped at larger Dynamic Type sizes":
+                // like `.dynamicType`, the pinned text size stops the audit
+                // from checking it for real; each screen runs at three sizes.
+                if issue.auditType == .textClipped,
+                   issue.compactDescription.localizedCaseInsensitiveContains("larger Dynamic Type") {
+                    return true
+                }
                 if issue.auditType == .contrast || issue.auditType == .textClipped,
                    bars.contains(where: { $0.intersects(element.frame) }) {
                     return true
