@@ -1,6 +1,9 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "" : {
+      "shouldTranslate" : false
+    },
     "%@ hours of good weather" : {
       "localizations" : {
         "de" : {
@@ -67,6 +70,9 @@
         }
       }
     },
+    "%@ · %@" : {
+      "shouldTranslate" : false
+    },
     "%@ · %@ · score %lld" : {
       "localizations" : {
         "de" : {
@@ -88,6 +94,9 @@
           }
         }
       }
+    },
+    "%@ · %lld" : {
+      "shouldTranslate" : false
     },
     "%@, %@, %@, score %lld" : {
       "localizations" : {
@@ -155,6 +164,9 @@
         }
       }
     },
+    "%@: %@" : {
+      "shouldTranslate" : false
+    },
     "%@: %lld out of 100, adds %lld points" : {
       "localizations" : {
         "de" : {
@@ -176,6 +188,9 @@
           }
         }
       }
+    },
+    "%lld" : {
+      "shouldTranslate" : false
     },
     "%lld active" : {
       "localizations" : {
@@ -350,6 +365,9 @@
           }
         }
       }
+    },
+    "%lld+" : {
+      "shouldTranslate" : false
     },
     "7 days" : {
       "localizations" : {
@@ -577,6 +595,28 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "Alert" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Melding"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hinweis"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aviso"
           }
         }
       }
@@ -827,6 +867,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Automatisch"
+          }
+        }
+      }
+    },
+    "Average" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gemiddelde"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durchschnitt"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Media"
           }
         }
       }
@@ -2527,6 +2589,28 @@
         }
       }
     },
+    "Edit Alert" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wijzig melding"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hinweis bearbeiten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Editar aviso"
+          }
+        }
+      }
+    },
     "Enabled" : {
       "localizations" : {
         "de" : {
@@ -2567,6 +2651,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Afgelopen"
+          }
+        }
+      }
+    },
+    "Ends %@" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eindigt op %@"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Endet am %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Termina el %@"
           }
         }
       }
@@ -3161,6 +3267,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Uitjes"
+          }
+        }
+      }
+    },
+    "Go" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ga"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gehe zu"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ir"
           }
         }
       }
@@ -4001,6 +4129,28 @@
         }
       }
     },
+    "Location is off for Pickhour. Choose a city, or turn it on in Settings." : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Locatie staat uit voor Pickhour. Kies een stad of zet het aan in Instellingen."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Standort ist für Pickhour deaktiviert. Wähle eine Stadt oder aktiviere ihn in den Einstellungen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La ubicación está desactivada para Pickhour. Elige una ciudad o actívala en Ajustes."
+          }
+        }
+      }
+    },
     "Location is used only while the app is open and is never stored." : {
       "localizations" : {
         "de" : {
@@ -4195,6 +4345,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "In de buurt, op hetzelfde moment"
+          }
+        }
+      }
+    },
+    "New Alert" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nieuwe melding"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neuer Hinweis"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nuevo aviso"
           }
         }
       }
@@ -4679,6 +4851,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Niet gevraagd"
+          }
+        }
+      }
+    },
+    "not included" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "niet inbegrepen"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nicht enthalten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no incluido"
           }
         }
       }
@@ -5251,6 +5445,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Parken, stranden, picknickplekken en voorzieningen komen van OpenStreetMap, © OpenStreetMap-bijdragers, beschikbaar onder de Open Database License (ODbL)."
+          }
+        }
+      }
+    },
+    "Pause" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pauzeer"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pause"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pausa"
           }
         }
       }
@@ -6083,6 +6299,28 @@
         }
       }
     },
+    "Planned" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gepland"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geplant"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Planeado"
+          }
+        }
+      }
+    },
     "Planned from your first %lld places." : {
       "localizations" : {
         "de" : {
@@ -6215,6 +6453,28 @@
         }
       }
     },
+    "Play hours" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speel uren af"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stunden abspielen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reproducir horas"
+          }
+        }
+      }
+    },
     "Playground" : {
       "localizations" : {
         "de" : {
@@ -6277,6 +6537,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Plus vindt per dag de beste 2–4 uur op je bewaarde plekken."
+          }
+        }
+      }
+    },
+    "Points" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Punten"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Punkte"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Puntos"
           }
         }
       }
@@ -6955,6 +7237,28 @@
         }
       }
     },
+    "Renews %@" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wordt verlengd op %@"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verlängert sich am %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se renueva el %@"
+          }
+        }
+      }
+    },
     "Report" : {
       "localizations" : {
         "de" : {
@@ -7043,6 +7347,50 @@
         }
       }
     },
+    "Restore Purchases" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Herstel aankopen"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Käufe wiederherstellen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restaurar compras"
+          }
+        }
+      }
+    },
+    "Restoring…" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Herstellen…"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird wiederhergestellt…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restaurando…"
+          }
+        }
+      }
+    },
     "Rough guess" : {
       "localizations" : {
         "de" : {
@@ -7109,6 +7457,28 @@
         }
       }
     },
+    "Save" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bewaar"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sichern"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardar"
+          }
+        }
+      }
+    },
     "Save as many places as you like." : {
       "localizations" : {
         "de" : {
@@ -7171,6 +7541,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bewaarde plekken"
+          }
+        }
+      }
+    },
+    "Saving…" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bewaren…"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird gesichert…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardando…"
           }
         }
       }
@@ -9349,6 +9741,28 @@
         }
       }
     },
+    "Unsave" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Niet meer bewaren"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht mehr sichern"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quitar de guardados"
+          }
+        }
+      }
+    },
     "Until" : {
       "localizations" : {
         "de" : {
@@ -9411,6 +9825,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gebruik mijn locatie"
+          }
+        }
+      }
+    },
+    "Use your location while the app is open, or pick a city." : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gebruik je locatie terwijl de app open is, of kies een stad."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nutze deinen Standort, während die App geöffnet ist, oder wähle eine Stadt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usa tu ubicación mientras la app está abierta o elige una ciudad."
           }
         }
       }
