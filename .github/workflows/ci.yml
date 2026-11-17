@@ -13,10 +13,39 @@ concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-jobs:
-  build:
-    runs-on: macos-15
+# Four jobs in parallel, so a slow one never holds the others back:
+#   ios (a)       ~15 min  half of the UI tests on a simulator
+#   ios (b)       ~15 min  the other half (and any test added later)
+#   macos         ~5 min   native Mac app: build + screenshots
+#   translations  ~3 min   every extracted string translated (nl, de, es)
+# `xcodebuild test` builds the app itself, so there is no separate build step.
 
+jobs:
+  ios:
+    name: ios (${{ matrix.group }})
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Split by measured run time (~12 min of tests each). Group b skips
+          # group a's tests and runs everything else, so a new test is never
+          # left out.
+          - group: a
+            select: >-
+              -only-testing:MyAppUITests/LayoutTests/testOnboardingPrimaryButtonsAtTheBottom
+              -only-testing:MyAppUITests/LayoutTests/testPaywall
+              -only-testing:MyAppUITests/LayoutTests/testBestNowAtNight
+              -only-testing:MyAppUITests/LayoutTests/testTabBarInThumbZone
+              -only-testing:MyAppUITests/MyAppUITests
+          - group: b
+            select: >-
+              -skip-testing:MyAppUITests/LayoutTests/testOnboardingPrimaryButtonsAtTheBottom
+              -skip-testing:MyAppUITests/LayoutTests/testPaywall
+              -skip-testing:MyAppUITests/LayoutTests/testBestNowAtNight
+              -skip-testing:MyAppUITests/LayoutTests/testTabBarInThumbZone
+              -skip-testing:MyAppUITests/MyAppUITests
+              -skip-testing:MyAppUITests/MacScreenshotTests
     steps:
       - uses: actions/checkout@v4
 
@@ -25,32 +54,9 @@ jobs:
           sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
           xcodebuild -version
 
-      - name: Build iOS/iPadOS (compile check, no signing)
-        run: |
-          xcodebuild \
-            -project MyApp.xcodeproj \
-            -scheme MyApp \
-            -destination 'generic/platform=iOS Simulator' \
-            -configuration Debug \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            build
-
-      # Native macOS destination of the same target (not Catalyst).
-      - name: Build macOS (compile check, no signing)
-        run: |
-          xcodebuild \
-            -project MyApp.xcodeproj \
-            -scheme MyApp \
-            -destination 'generic/platform=macOS' \
-            -configuration Debug \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            build
-
-      # Unit + UI tests on the first available iPhone simulator of the
-      # selected Xcode (device names change between Xcode releases).
-      - name: Test iOS (unit + UI tests on a simulator)
+      # The first available iPhone simulator of the selected Xcode (device
+      # names change between Xcode releases).
+      - name: Test iOS
         run: |
           UDID=$(xcrun simctl list devices available -j \
             | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(x["udid"] for r in sorted(d, reverse=True) if "iOS" in r for x in d[r] if x["name"].startswith("iPhone")))')
@@ -61,12 +67,13 @@ jobs:
             -destination "id=$UDID" \
             -configuration Debug \
             -resultBundlePath build/ios.xcresult \
+            ${{ matrix.select }} \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             test
 
-      # Failure screenshots XCTest takes automatically, for review without a Mac.
-      - name: Export iOS failure screenshots
+      # A screenshot per failure (LayoutTests.record), for review without a Mac.
+      - name: Export failure screenshots
         if: ${{ failure() && hashFiles('build/ios.xcresult/Info.plist') != '' }}
         run: |
           mkdir -p build/ios-screenshots
@@ -75,19 +82,29 @@ jobs:
           python3 scripts/rename-screenshots.py build/ios-screenshots \
             || echo "rename failed: keeping the exported file names"
 
-      - name: Upload iOS failure screenshots
+      - name: Upload failure screenshots
         if: ${{ failure() }}
         uses: actions/upload-artifact@v4
         with:
-          name: ios-failure-screenshots
+          name: ios-failure-screenshots-${{ matrix.group }}
           path: build/ios-screenshots
           if-no-files-found: ignore
           retention-days: 14
 
-      # Native Mac app on fixture data (no backend): captures the main screens
-      # for review without a Mac. Signing overrides: ci/mac-screenshots.xcconfig.
+  # Native Mac app (same target, not Catalyst) on fixture data, no backend.
+  # Building it for the tests is the macOS compile check. Signing overrides:
+  # ci/mac-screenshots.xcconfig.
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+          xcodebuild -version
+
       - name: Test macOS (screenshots)
-        if: ${{ !cancelled() }}
         run: |
           xcodebuild \
             -project MyApp.xcodeproj \
@@ -99,7 +116,7 @@ jobs:
             -xcconfig ci/mac-screenshots.xcconfig \
             test
 
-      - name: Export macOS screenshots
+      - name: Export screenshots
         if: ${{ !cancelled() && hashFiles('build/mac.xcresult/Info.plist') != '' }}
         run: |
           mkdir -p build/mac-screenshots
@@ -108,7 +125,7 @@ jobs:
           python3 scripts/rename-screenshots.py build/mac-screenshots \
             || echo "rename failed: keeping the exported file names"
 
-      - name: Upload macOS screenshots
+      - name: Upload screenshots
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
@@ -117,11 +134,19 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-      # Runs after the tests (always), so a missing translation never hides
-      # test results. Every string Xcode extracts from the code must be translated for
-      # the shipped languages (catches new or reworded strings).
+  # Every string Xcode extracts from the code must be translated for the
+  # shipped languages (catches new or reworded strings).
+  translations:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+          xcodebuild -version
+
       - name: Check translations (nl, de, es)
-        if: always()
         run: |
           xcodebuild -exportLocalizations \
             -project MyApp.xcodeproj \
