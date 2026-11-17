@@ -122,6 +122,69 @@ final class MacScreenshotTests: XCTestCase {
         app.terminate()
     }
 
+    /// The real flow, no seeded data: Plan It on the decision card stores the
+    /// plan on device, the sidebar's Plans section appears, and its row opens
+    /// the plan sheet.
+    func test08Plans() {
+        let app = launch()
+        waitForResults(app, "plans")
+        let planIt = app.descendants(matching: .any).matching(identifier: "planItButton").firstMatch
+        guard planIt.waitForExistence(timeout: 5) else {
+            XCTFail("[plans] no Plan It button on the decision card")
+            capture(app, "08-plans-sidebar")
+            app.terminate()
+            return
+        }
+        planIt.click()
+        let row = app.descendants(matching: .any).matching(identifier: "picnicPlanRow").firstMatch
+        if !row.waitForExistence(timeout: 5) {
+            XCTFail("[plans] Plan It added no row to the Plans section")
+        }
+        scrollIntoView(row, in: app)
+        settle(1)
+        capture(app, "08-plans-sidebar")
+
+        if row.exists {
+            row.click()
+            if !app.sheets.firstMatch.waitForExistence(timeout: 5) {
+                XCTFail("[plans] the plan row did not open the plan sheet")
+            }
+            settle(1)
+            capture(app, "09-plan-sheet")
+        }
+        app.terminate()
+    }
+
+    /// Week plan for the saved spots (fixture favorites), lower in the sidebar.
+    func test09WeekPlan() {
+        let app = launch()
+        waitForResults(app, "week plan")
+        let row = app.descendants(matching: .any).matching(identifier: "planRow").firstMatch
+        if !row.waitForExistence(timeout: 10) {
+            XCTFail("[week plan] no week plan rows for the saved spots")
+        }
+        scrollIntoView(row, in: app)
+        settle(1)
+        capture(app, "10-week-plan")
+        app.terminate()
+    }
+
+    /// Scrolls the sidebar until `element` is on screen (macOS does not
+    /// scroll for a screenshot by itself).
+    private func scrollIntoView(_ element: XCUIElement, in app: XCUIApplication) {
+        guard element.exists else { return }
+        let list = app.outlines.firstMatch.exists ? app.outlines.firstMatch : app.tables.firstMatch
+        guard list.exists else { return }
+        for delta in [-120.0, 120.0] {
+            var tries = 0
+            while !element.isHittable && tries < 10 {
+                list.scroll(byDeltaX: 0, deltaY: delta)
+                tries += 1
+            }
+            if element.isHittable { return }
+        }
+    }
+
     func test07German() {
         let app = launch(language: "de")
         waitForResults(app, "de")
