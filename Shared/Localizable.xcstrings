@@ -10806,6 +10806,116 @@
           }
         }
       }
+    },
+    "Update Required" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update erforderlich"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actualización necesaria"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update vereist"
+          }
+        }
+      }
+    },
+    "Update Available" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update verfügbar"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actualización disponible"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update beschikbaar"
+          }
+        }
+      }
+    },
+    "Update" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktualisieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actualizar"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bijwerken"
+          }
+        }
+      }
+    },
+    "A new version of Pickhour is available." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine neue Version von Pickhour ist verfügbar."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hay una nueva versión de Pickhour disponible."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Er is een nieuwe versie van Pickhour beschikbaar."
+          }
+        }
+      }
+    },
+    "This version of Pickhour is no longer supported. Update to the latest version to keep finding the best hours for a picnic." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Version von Pickhour wird nicht mehr unterstützt. Aktualisiere auf die neueste Version, um weiterhin die besten Stunden für ein Picknick zu finden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta versión de Pickhour ya no es compatible. Actualiza a la última versión para seguir encontrando las mejores horas para un pícnic."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze versie van Pickhour wordt niet meer ondersteund. Werk bij naar de nieuwste versie om de beste uren voor een picknick te blijven vinden."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

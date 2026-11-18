@@ -20,7 +20,10 @@ struct PlanRouting: ViewModifier {
             .onChange(of: scenePhase) { _, phase in
                 guard phase == .active else { return }
                 app.planSync.requestSync()
-                Task { await app.touchDeviceIfStale() }
+                Task {
+                    await app.checkAppVersion()
+                    await app.touchDeviceIfStale()
+                }
             }
             // `.task` covers a tap that launched the app (set before this
             // view existed, so `onChange` never sees it).

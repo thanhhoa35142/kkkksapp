@@ -299,10 +299,47 @@ final class AppState {
         await registerDevice()
     }
 
+    // MARK: - App version (force update)
+
+    /// `.required` replaces the whole UI (RootView); `.available` shows a
+    /// dismissible prompt once.
+    var appUpdate: AppUpdateState = .none
+    @ObservationIgnored private var lastVersionCheckAt: Date?
+
+    /// Asks the server for its version policy (launch, then at most hourly on
+    /// foreground). Offline or a server error: the app keeps working — a
+    /// blocked build still learns it from the first 426.
+    func checkAppVersion(now: Date = .now) async {
+        if let last = lastVersionCheckAt, now.timeIntervalSince(last) < 3600 { return }
+        lastVersionCheckAt = now
+        AppUpdateSignal.onUpgradeRequired = { [weak self] url in
+            self?.appUpdate = .required(storeURL: url)
+        }
+        do {
+            let config = try await api.appConfig()
+            let storeURL = config.storeUrl.flatMap(URL.init(string:))
+            switch config.status {
+            case .updateRequired:
+                appUpdate = .required(storeURL: storeURL)
+            case .updateAvailable:
+                if appUpdate == .none { appUpdate = .available(storeURL: storeURL) }
+            case .ok, .unknown:
+                if case .required = appUpdate { appUpdate = .none }
+            }
+        } catch {
+            lastVersionCheckAt = nil
+            Log.api.error("app config failed: \(error.localizedDescription)")
+        }
+    }
+
     /// Registers this install and loads the plan.
     func bootstrap() async {
         let deviceID = DeviceIdentity.deviceID
+        await checkAppVersion()
         await registerDevice()
+        if !UITestFixtures.isActive {
+            Task.detached(priority: .utility) { [api] in await AppAttestor.attestIfNeeded(api: api) }
+        }
         // APNs can rotate the token (restore, reinstall, OS update); asking on
         // every launch hands the current one to handleDeviceToken, which
         // re-registers it. No prompt: only runs when already authorized.

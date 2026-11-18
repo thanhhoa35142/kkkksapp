@@ -119,7 +119,9 @@ actor APIClient {
             throw APIError(problem: APIProblem(type: nil, code: "transport_error", title: "No HTTP response", status: 0, detail: nil, instance: nil, requestId: nil))
         }
         guard (200..<300).contains(http.statusCode) else {
-            if let problem = try? decoder.decode(APIProblem.self, from: data) {
+            let problem = try? decoder.decode(APIProblem.self, from: data)
+            Self.signalUpgradeIfNeeded(status: http.statusCode, problem: problem)
+            if let problem {
                 throw APIError(problem: problem)
             }
             throw APIError(problem: APIProblem(

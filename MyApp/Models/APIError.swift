@@ -9,6 +9,9 @@ struct APIProblem: Decodable {
     let detail: String?
     let instance: String?
     let requestId: String?
+    /// Values for the client's own localized message (e.g. `minVersion`,
+    /// `storeUrl` on `upgrade_required`). Absent on most codes.
+    var params: [String: JSONValue]? = nil
 }
 
 /// Typed API error — switch on `code`, never on `title`.
