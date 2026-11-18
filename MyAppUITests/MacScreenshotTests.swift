@@ -87,7 +87,16 @@ final class MacScreenshotTests: XCTestCase {
     }
 
     func test02SpotDetailInspector() {
-        let app = launch()
+        spotDetailInspector(dark: false, name: "02-spot-detail")
+    }
+
+    /// The website's Mac image in dark appearance.
+    func test02bSpotDetailInspectorDark() {
+        spotDetailInspector(dark: true, name: "02b-spot-detail-dark")
+    }
+
+    private func spotDetailInspector(dark: Bool, name: String) {
+        let app = launch(dark: dark)
         let top = waitForResults(app, "detail")
         if top.exists {
             top.click()
@@ -97,7 +106,7 @@ final class MacScreenshotTests: XCTestCase {
             }
             settle(2)
         }
-        capture(app, "02-spot-detail")
+        capture(app, name)
         app.terminate()
     }
 

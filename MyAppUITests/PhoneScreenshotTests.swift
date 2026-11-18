@@ -246,8 +246,54 @@ final class PhoneScreenshotTests: XCTestCase {
     // MARK: - Website shots (no half-scrolled content at the top)
 
     /// Spot Detail with "Next 7 days" brought to the top of the screen.
-    func test23MarketingWeek() {
-        let app = launch()
+    func test23MarketingWeek() { marketingWeek(dark: false, name: "42-marketing-week") }
+
+    /// The score breakdown pulled up to its full height.
+    func test24MarketingWhy() { marketingWhy(dark: false, name: "43-marketing-why") }
+
+    /// The website's screens in dark appearance (the site follows the
+    /// visitor's system setting and shows these then).
+    func test25WebsiteDark() {
+        var app = launch(dark: true)
+        waitForResults(app, "dark best now")
+        capture("50-dark-best-now")
+        openTab(app, "Map")
+        settle(2)
+        capture("51-dark-map")
+        app.terminate()
+
+        app = launch(dark: true)
+        openSpotDetail(app)
+        capture("52-dark-spot")
+        app.terminate()
+
+        app = launch(localHour: 2, dark: true)
+        waitForResults(app, "dark night")
+        capture("53-dark-night")
+        app.terminate()
+
+        app = launch(dark: true)
+        waitForResults(app, "dark getaways")
+        if tap(button(app, "Amsterdam"), "place menu", in: app),
+           tap(button(app, "Where's Nice This Weekend?"), "Where's Nice This Weekend?", in: app) {
+            settle(1.5)
+            capture("54-dark-getaways")
+        }
+        app.terminate()
+
+        app = launch(plan: "plus", dark: true)
+        waitForResults(app, "dark saved")
+        openTab(app, "Saved")
+        capture("55-dark-saved")
+        app.terminate()
+    }
+
+    func test26WebsiteDarkWeek() { marketingWeek(dark: true, name: "56-dark-week") }
+
+    func test27WebsiteDarkWhy() { marketingWhy(dark: true, name: "57-dark-why") }
+
+    private func marketingWeek(dark: Bool, name: String) {
+        let app = launch(dark: dark)
         openSpotDetail(app)
         let header = app.staticTexts["Next 7 days"]
         if !header.waitForExistence(timeout: 5) || !header.isHittable {
@@ -255,13 +301,12 @@ final class PhoneScreenshotTests: XCTestCase {
         }
         guard header.exists else { return XCTFail("no Next 7 days header") }
         bringToTop(header, in: app)
-        capture("42-marketing-week")
+        capture(name)
         app.terminate()
     }
 
-    /// The score breakdown pulled up to its full height.
-    func test24MarketingWhy() {
-        let app = launch()
+    private func marketingWhy(dark: Bool, name: String) {
+        let app = launch(dark: dark)
         openSpotDetail(app)
         guard tap(button(app, beginningWith: "Why"), "Why NN?", in: app) else { return }
         let sheetTitle = app.navigationBars.staticTexts.matching(
@@ -273,7 +318,7 @@ final class PhoneScreenshotTests: XCTestCase {
                         thenHoldForDuration: 0.3)
             settle(1.5)
         }
-        capture("43-marketing-why")
+        capture(name)
         app.terminate()
     }
 
