@@ -62,6 +62,14 @@ jobs:
           UDID=$(xcrun simctl list devices available -j \
             | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(x["udid"] for r in sorted(d, reverse=True) if "iOS" in r for x in d[r] if x["name"].startswith("iPhone")))')
           echo "Simulator: $UDID"
+          # Clean status bar for the screenshots (they feed the website):
+          # 9:41, full signal and battery, as in Apple's own marketing.
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl status_bar "$UDID" override --time 9:41 \
+            --dataNetwork wifi --wifiMode active --wifiBars 3 \
+            --cellularMode active --cellularBars 4 \
+            --batteryState charged --batteryLevel 100
           xcodebuild \
             -project MyApp.xcodeproj \
             -scheme MyApp \
