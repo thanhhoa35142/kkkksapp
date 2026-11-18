@@ -243,6 +243,55 @@ final class PhoneScreenshotTests: XCTestCase {
         app.terminate()
     }
 
+    // MARK: - Website shots (no half-scrolled content at the top)
+
+    /// Spot Detail with "Next 7 days" brought to the top of the screen.
+    func test23MarketingWeek() {
+        let app = launch()
+        openSpotDetail(app)
+        let header = app.staticTexts["Next 7 days"]
+        if !header.waitForExistence(timeout: 5) || !header.isHittable {
+            Layout.scrollTo(header, in: app)
+        }
+        guard header.exists else { return XCTFail("no Next 7 days header") }
+        bringToTop(header, in: app)
+        capture("42-marketing-week")
+        app.terminate()
+    }
+
+    /// The score breakdown pulled up to its full height.
+    func test24MarketingWhy() {
+        let app = launch()
+        openSpotDetail(app)
+        guard tap(button(app, beginningWith: "Why"), "Why NN?", in: app) else { return }
+        let sheetTitle = app.navigationBars.staticTexts.matching(
+            NSPredicate(format: "label BEGINSWITH 'Why'")).firstMatch
+        if sheetTitle.waitForExistence(timeout: 3) {
+            let start = sheetTitle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.05))
+            start.press(forDuration: 0.1, thenDragTo: end, withVelocity: .slow,
+                        thenHoldForDuration: 0.3)
+            settle(1.5)
+        }
+        capture("43-marketing-why")
+        app.terminate()
+    }
+
+    /// Drags `element` up to just under the navigation bar, holding at the
+    /// end so the list does not keep scrolling.
+    private func bringToTop(_ element: XCUIElement, in app: XCUIApplication) {
+        let target = app.navigationBars.firstMatch.exists
+            ? app.navigationBars.firstMatch.frame.maxY + 16
+            : app.frame.height * 0.14
+        let dy = element.frame.minY - target
+        guard dy > 8 else { return }
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85))
+        let end = start.withOffset(CGVector(dx: 0, dy: -dy))
+        start.press(forDuration: 0.1, thenDragTo: end, withVelocity: .slow,
+                    thenHoldForDuration: 0.5)
+        settle(1)
+    }
+
     func test14AlertEditor() {
         let app = launch()
         openSpotDetail(app)
