@@ -101,11 +101,25 @@ struct PaywallSheet: View {
                     Task { await buy(product) }
                 } label: {
                     HStack {
+                        let saving = savings(product)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(product.displayName)
-                                .font(.headline)
-                            if let period = periodLabel(product) {
-                                Text(period)
+                            HStack(spacing: 8) {
+                                Text(product.displayName)
+                                    .font(.headline)
+                                if let saving {
+                                    Text("Save \(saving.percent)%")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.tint)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 2)
+                                        .background(.tint.opacity(0.15), in: Capsule())
+                                }
+                            }
+                            let subtitle = [periodLabel(product), saving.map {
+                                String(localized: "\($0.perMonth)/month")
+                            }].compactMap { $0 }.joined(separator: " · ")
+                            if !subtitle.isEmpty {
+                                Text(verbatim: subtitle)
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                             }
@@ -132,6 +146,32 @@ struct PaywallSheet: View {
     private func loadProducts() async {
         let loaded = (try? await Product.products(for: Self.productIDs)) ?? []
         products = Self.productIDs.compactMap { id in loaded.first { $0.id == id } }
+    }
+
+    /// Longer plans vs. paying monthly for the same span, from the live
+    /// StoreKit prices: the badge stays true whatever the prices are set to
+    /// in App Store Connect. Nil under 5% (not worth a badge) or without a
+    /// monthly product to compare against.
+    private func savings(_ product: Product) -> (percent: Int, perMonth: String)? {
+        guard let months = monthCount(product), months > 1,
+              let monthly = products.first(where: { monthCount($0) == 1 }),
+              monthly.price > 0
+        else { return nil }
+        let ratio = 1 - product.price / (monthly.price * Decimal(months))
+        let percent = Int((NSDecimalNumber(decimal: ratio).doubleValue * 100).rounded())
+        guard percent >= 5 else { return nil }
+        let perMonth = (product.price / Decimal(months)).formatted(product.priceFormatStyle)
+        return (percent, perMonth)
+    }
+
+    /// Subscription length in months; nil for products billed by day/week.
+    private func monthCount(_ product: Product) -> Int? {
+        guard let period = product.subscription?.subscriptionPeriod else { return nil }
+        switch period.unit {
+        case .month: return period.value
+        case .year: return period.value * 12
+        default: return nil
+        }
     }
 
     private func periodLabel(_ product: Product) -> String? {
