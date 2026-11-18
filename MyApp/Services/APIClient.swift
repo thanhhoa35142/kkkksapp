@@ -80,7 +80,28 @@ actor APIClient {
         return try decode(data, enveloped: enveloped)
     }
 
+    /// Asserted requests go out one at a time across all clients: the server
+    /// refuses an App Attest counter lower than the last one it accepted, so
+    /// requests must arrive in the order they were signed.
+    private static let assertionLock = AsyncLock()
+
     func send<T: Decodable>(_ method: HTTPMethod, _ path: String, body: Encodable) async throws -> T {
+        // Encoded once: the assertion signs exactly the bytes that are sent.
+        let bodyData = try encoder.encode(AnyEncodable(body))
+        guard AppAssertionRoutes.covers(method, path) else {
+            return try await perform(method, path, body: bodyData, asserted: false)
+        }
+        do {
+            return try await perform(method, path, body: bodyData, asserted: true)
+        } catch let error as APIError where error.code == "attest_required" {
+            // The route enforces App Attest and the server doesn't know our
+            // key (reinstall, deleted data): re-attest, then retry once.
+            guard await AppAttestor.attestIfNeeded(api: self, force: true) else { throw error }
+            return try await perform(method, path, body: bodyData, asserted: true)
+        }
+    }
+
+    private func perform<T: Decodable>(_ method: HTTPMethod, _ path: String, body: Data, asserted: Bool) async throws -> T {
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
         request.httpMethod = method.rawValue
         request.setValue(requestID, forHTTPHeaderField: "X-Request-ID")
@@ -88,8 +109,26 @@ actor APIClient {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         Self.clientHeaders.forEach { request.setValue($1, forHTTPHeaderField: $0) }
         Self.applyDeviceHeaders(to: &request)
-        request.httpBody = try encoder.encode(AnyEncodable(body))
+        request.httpBody = body
 
+        guard asserted else { return try await execute(request) }
+        await Self.assertionLock.lock()
+        do {
+            // Signs the path as sent (what the server reads from the URL).
+            if let assertion = await AppAttestor.assertion(
+                method: method.rawValue, path: request.url?.path ?? path, body: body) {
+                request.setValue(assertion, forHTTPHeaderField: "X-App-Assertion")
+            }
+            let result: T = try await execute(request)
+            await Self.assertionLock.unlock()
+            return result
+        } catch {
+            await Self.assertionLock.unlock()
+            throw error
+        }
+    }
+
+    private func execute<T: Decodable>(_ request: URLRequest) async throws -> T {
         let (data, response) = try await session.data(for: request)
         try validate(response: response, data: data)
         return try decode(data, enveloped: true)
@@ -155,6 +194,44 @@ actor APIClient {
         let digits = string[afterDot..<zone]
         let millis = String(digits.prefix(3)).padding(toLength: 3, withPad: "0", startingAt: 0)
         return String(string[...dot]) + millis + String(string[zone...])
+    }
+}
+
+/// Routes the backend checks `X-App-Assertion` on (its App Attest route
+/// groups: devices, reports, entitlement, plans). Public GETs never carry one.
+enum AppAssertionRoutes {
+    static func covers(_ method: APIClient.HTTPMethod, _ path: String) -> Bool {
+        guard method == .post else { return false }
+        switch path {
+        case "/v1/devices", "/v1/scores/feedback", "/v1/entitlement/link", "/v1/plans":
+            return true
+        default:
+            if path.hasPrefix("/v1/plan-follows/") { return true }
+            return path.hasPrefix("/v1/spots/")
+                && (path.hasSuffix("/reports") || path.hasSuffix("/crowd-reports"))
+        }
+    }
+}
+
+/// FIFO async mutex (no thread is blocked while waiting).
+actor AsyncLock {
+    private var locked = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func lock() async {
+        guard locked else {
+            locked = true
+            return
+        }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+
+    func unlock() {
+        if waiters.isEmpty {
+            locked = false
+        } else {
+            waiters.removeFirst().resume()
+        }
     }
 }
 
