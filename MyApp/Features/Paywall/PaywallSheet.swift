@@ -35,7 +35,10 @@ struct PaywallSheet: View {
     @Environment(AppState.self) private var app
     @Environment(\.dismiss) private var dismiss
 
-    @State private var products: [Product] = []
+    /// What the rows show, in App Store Connect order.
+    @State private var options: [PlanOption] = []
+    /// The StoreKit products behind `options`, for `buy` (empty in fixture mode).
+    @State private var products: [String: Product] = [:]
     @State private var purchasingID: String?
     @State private var notice: String?
 
@@ -92,13 +95,13 @@ struct PaywallSheet: View {
 
     @ViewBuilder
     private var productList: some View {
-        if products.isEmpty {
+        if options.isEmpty {
             ProgressView()
                 .frame(maxWidth: .infinity)
         } else {
-            ForEach(products, id: \.id) { product in
+            ForEach(options) { product in
                 Button {
-                    Task { await buy(product) }
+                    Task { await buy(product.id) }
                 } label: {
                     HStack {
                         let saving = savings(product)
@@ -142,19 +145,27 @@ struct PaywallSheet: View {
         }
     }
 
-    /// Products in the order declared in App Store Connect.
+    /// Products in the order declared in App Store Connect. UI-test fixture
+    /// mode has no StoreKit products, so it shows the launch prices instead
+    /// (screenshots for App Review and the product page).
     private func loadProducts() async {
+        if UITestFixtures.isActive {
+            options = PlanOption.fixtures
+            return
+        }
         let loaded = (try? await Product.products(for: Self.productIDs)) ?? []
-        products = Self.productIDs.compactMap { id in loaded.first { $0.id == id } }
+        let ordered = Self.productIDs.compactMap { id in loaded.first { $0.id == id } }
+        products = Dictionary(uniqueKeysWithValues: ordered.map { ($0.id, $0) })
+        options = ordered.map(PlanOption.init)
     }
 
     /// Longer plans vs. paying monthly for the same span, from the live
     /// StoreKit prices: the badge stays true whatever the prices are set to
     /// in App Store Connect. Nil under 5% (not worth a badge) or without a
     /// monthly product to compare against.
-    private func savings(_ product: Product) -> (percent: Int, perMonth: String)? {
-        guard let months = monthCount(product), months > 1,
-              let monthly = products.first(where: { monthCount($0) == 1 }),
+    private func savings(_ product: PlanOption) -> (percent: Int, perMonth: String)? {
+        guard let months = product.months, months > 1,
+              let monthly = options.first(where: { $0.months == 1 }),
               monthly.price > 0
         else { return nil }
         let ratio = 1 - product.price / (monthly.price * Decimal(months))
@@ -164,21 +175,11 @@ struct PaywallSheet: View {
         return (percent, perMonth)
     }
 
-    /// Subscription length in months; nil for products billed by day/week.
-    private func monthCount(_ product: Product) -> Int? {
-        guard let period = product.subscription?.subscriptionPeriod else { return nil }
-        switch period.unit {
-        case .month: return period.value
-        case .year: return period.value * 12
-        default: return nil
-        }
-    }
-
-    private func periodLabel(_ product: Product) -> String? {
-        guard let period = product.subscription?.subscriptionPeriod else { return nil }
+    private func periodLabel(_ product: PlanOption) -> String? {
+        guard let unit = product.periodUnit else { return nil }
         // Whole phrases per unit: "every 3 \(unit)s" only pluralises in English.
-        let n = period.value
-        switch period.unit {
+        let n = product.periodValue
+        switch unit {
         case .day: return n == 1 ? String(localized: "per day") : String(localized: "every \(n) days")
         case .week: return n == 1 ? String(localized: "per week") : String(localized: "every \(n) weeks")
         case .month: return n == 1 ? String(localized: "per month") : String(localized: "every \(n) months")
@@ -187,7 +188,9 @@ struct PaywallSheet: View {
         }
     }
 
-    private func buy(_ product: Product) async {
+    private func buy(_ id: String) async {
+        // Fixture mode: no StoreKit product, nothing to buy.
+        guard let product = products[id] else { return }
         purchasingID = product.id
         notice = nil
         defer { purchasingID = nil }
@@ -307,4 +310,56 @@ private struct PlanComparison: View {
             }
         }
     }
+}
+
+/// One row of the paywall: a StoreKit product, or fixed launch prices in
+/// UI-test fixture mode (no StoreKit there). Holds only what the rows and the
+/// "Save N%" badge read.
+struct PlanOption: Identifiable {
+    let id: String
+    let displayName: String
+    let displayPrice: String
+    let price: Decimal
+    let priceFormatStyle: Decimal.FormatStyle.Currency
+    /// nil for a non-subscription product.
+    let periodUnit: Product.SubscriptionPeriod.Unit?
+    let periodValue: Int
+
+    init(_ product: Product) {
+        id = product.id
+        displayName = product.displayName
+        displayPrice = product.displayPrice
+        price = product.price
+        priceFormatStyle = product.priceFormatStyle
+        periodUnit = product.subscription?.subscriptionPeriod.unit
+        periodValue = product.subscription?.subscriptionPeriod.value ?? 0
+    }
+
+    private init(id: String, displayName: String, usd: String,
+                 unit: Product.SubscriptionPeriod.Unit) {
+        let style = Decimal.FormatStyle.Currency(code: "USD", locale: Locale(identifier: "en_US"))
+        let price = Decimal(string: usd, locale: Locale(identifier: "en_US_POSIX")) ?? 0
+        self.id = id
+        self.displayName = displayName
+        self.displayPrice = price.formatted(style)
+        self.price = price
+        self.priceFormatStyle = style
+        self.periodUnit = unit
+        self.periodValue = 1
+    }
+
+    /// Subscription length in months; nil for products billed by day/week.
+    var months: Int? {
+        switch periodUnit {
+        case .month?: periodValue
+        case .year?: periodValue * 12
+        default: nil
+        }
+    }
+
+    /// Launch prices and App Store Connect display names (US storefront).
+    static let fixtures: [PlanOption] = [
+        PlanOption(id: PaywallSheet.productIDs[0], displayName: "Plus Yearly", usd: "29.99", unit: .year),
+        PlanOption(id: PaywallSheet.productIDs[1], displayName: "Plus Monthly", usd: "4.99", unit: .month),
+    ]
 }

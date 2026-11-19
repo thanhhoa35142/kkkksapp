@@ -33,6 +33,8 @@ jobs:
           # group a's tests and runs everything else, so a new test is never
           # left out.
           - group: a
+            # App Store iPhone size (6.9": 1320 × 2868) for the screenshots.
+            phone: Pro Max
             select: >-
               -only-testing:MyAppUITests/LayoutTests/testOnboardingPrimaryButtonsAtTheBottom
               -only-testing:MyAppUITests/LayoutTests/testBestNowAtNight
@@ -40,6 +42,8 @@ jobs:
               -only-testing:MyAppUITests/MyAppUITests
               -only-testing:MyAppUITests/PhoneScreenshotTests
           - group: b
+            # Any iPhone (the first one listed), as before.
+            phone: ""
             select: >-
               -skip-testing:MyAppUITests/LayoutTests/testOnboardingPrimaryButtonsAtTheBottom
               -skip-testing:MyAppUITests/LayoutTests/testBestNowAtNight
@@ -47,6 +51,7 @@ jobs:
               -skip-testing:MyAppUITests/MyAppUITests
               -skip-testing:MyAppUITests/MacScreenshotTests
               -skip-testing:MyAppUITests/PhoneScreenshotTests
+              -skip-testing:MyAppUITests/PadScreenshotTests
     steps:
       - uses: actions/checkout@v4
 
@@ -55,12 +60,15 @@ jobs:
           sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
           xcodebuild -version
 
-      # The first available iPhone simulator of the selected Xcode (device
-      # names change between Xcode releases).
+      # An iPhone of the newest iOS runtime whose name contains matrix.phone
+      # (device names change between Xcode releases, so no fixed name).
+      # Fails when none matches, rather than taking screenshots at a size
+      # App Store Connect rejects.
       - name: Test iOS
+        env:
+          PHONE: ${{ matrix.phone }}
         run: |
-          UDID=$(xcrun simctl list devices available -j \
-            | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(x["udid"] for r in sorted(d, reverse=True) if "iOS" in r for x in d[r] if x["name"].startswith("iPhone")))')
+          UDID=$(xcrun simctl list devices available -j | python3 scripts/pick-simulator.py iPhone "$PHONE")
           echo "Simulator: $UDID"
           # Clean status bar for the screenshots (they feed the website):
           # 9:41, full signal and battery, as in Apple's own marketing.
@@ -85,18 +93,65 @@ jobs:
       - name: Export screenshots
         if: ${{ !cancelled() && matrix.group == 'a' && hashFiles('build/ios.xcresult/Info.plist') != '' }}
         run: |
-          mkdir -p build/ios-all
+          mkdir -p build/ios-all build/iphone
           xcrun xcresulttool export attachments \
             --path build/ios.xcresult --output-path build/ios-all
           python3 scripts/rename-screenshots.py build/ios-all \
             || echo "rename failed: keeping the exported file names"
+          cp build/ios-all/[0-9][0-9]-*.png build/iphone/ || true
+          python3 scripts/check-screenshot-sizes.py build/iphone 1320x2868
 
       - name: Upload screenshots
         if: ${{ !cancelled() && matrix.group == 'a' }}
         uses: actions/upload-artifact@v4
         with:
           name: ios-screenshots
-          path: build/ios-all/[0-9][0-9]-*.png
+          path: build/iphone/*.png
+          if-no-files-found: warn
+          retention-days: 14
+
+      # Group b: the iPad screens, reusing the build of the step above
+      # (simulator builds run on any simulator). Its own step so an iPad
+      # failure is not hidden by group b's tests, and the other way round.
+      - name: iPad screenshots
+        id: ipad
+        if: ${{ !cancelled() && matrix.group == 'b' }}
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 scripts/pick-simulator.py iPad "Pro 13-inch")
+          echo "Simulator: $UDID"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl status_bar "$UDID" override --time 9:41 \
+            --dataNetwork wifi --wifiMode active --wifiBars 3 \
+            --batteryState charged --batteryLevel 100
+          xcodebuild \
+            -project MyApp.xcodeproj \
+            -scheme MyApp \
+            -destination "id=$UDID" \
+            -configuration Debug \
+            -resultBundlePath build/ipad.xcresult \
+            -only-testing:MyAppUITests/PadScreenshotTests \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            test-without-building
+
+      - name: Export iPad screenshots
+        if: ${{ !cancelled() && matrix.group == 'b' && hashFiles('build/ipad.xcresult/Info.plist') != '' }}
+        run: |
+          mkdir -p build/ipad-all build/ipad
+          xcrun xcresulttool export attachments \
+            --path build/ipad.xcresult --output-path build/ipad-all
+          python3 scripts/rename-screenshots.py build/ipad-all \
+            || echo "rename failed: keeping the exported file names"
+          cp build/ipad-all/[0-9][0-9]-*.png build/ipad/ || true
+          python3 scripts/check-screenshot-sizes.py build/ipad 2752x2064 2064x2752
+
+      - name: Upload iPad screenshots
+        if: ${{ !cancelled() && matrix.group == 'b' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ipad-screenshots
+          path: build/ipad/*.png
           if-no-files-found: warn
           retention-days: 14
 
@@ -153,12 +208,36 @@ jobs:
           python3 scripts/rename-screenshots.py build/mac-screenshots \
             || echo "rename failed: keeping the exported file names"
 
+      # The runner's screen (1024 × 768) caps the window below every App
+      # Store Mac size, so each window shot is centred on a 1280 × 800
+      # canvas (App Store's smallest Mac size) in macOS window-background
+      # gray. A shot already larger is left as it is and fails the check.
+      - name: App Store Mac screenshots (1280 × 800)
+        if: ${{ !cancelled() && hashFiles('build/mac-screenshots/*.png') != '' }}
+        run: |
+          mkdir -p build/mac-appstore
+          for f in build/mac-screenshots/[0-9][0-9]*.png; do
+            sips --padToHeightWidth 800 1280 --padColor ECECEC "$f" \
+              --out "build/mac-appstore/$(basename "$f")" >/dev/null \
+              || cp "$f" build/mac-appstore/
+          done
+          python3 scripts/check-screenshot-sizes.py build/mac-appstore 1280x800
+
       - name: Upload screenshots
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: macos-screenshots
           path: build/mac-screenshots/*.png
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload App Store Mac screenshots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-appstore-screenshots
+          path: build/mac-appstore/*.png
           if-no-files-found: warn
           retention-days: 14
 
