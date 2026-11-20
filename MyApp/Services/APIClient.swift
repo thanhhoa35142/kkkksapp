@@ -33,7 +33,19 @@ actor APIClient {
         }
     }
 
-    init(baseURL: URL, session: URLSession = .shared) {
+    /// The app's session. `URLSession.shared` waits 60 s per request, which
+    /// leaves a user (and, for asserted POSTs, every request queued behind
+    /// them) staring at a stuck screen. 20 s per request is plenty for these
+    /// small JSON calls; 60 s caps the whole transfer.
+    static func makeSession() -> URLSession {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 20
+        config.timeoutIntervalForResource = 60
+        config.waitsForConnectivity = false
+        return URLSession(configuration: config)
+    }
+
+    init(baseURL: URL, session: URLSession = APIClient.makeSession()) {
         self.baseURL = baseURL
         self.session = session
 
@@ -53,7 +65,9 @@ actor APIClient {
 
     // MARK: - Plumbing
 
-    var requestID: String { UUID().uuidString }
+    /// Fresh per request; the one sent is read back from the request when a
+    /// failure is reported, so the event matches the server's log line.
+    private func newRequestID() -> String { UUID().uuidString }
 
     private func url(for path: String, query: [URLQueryItem]) throws -> URL {
         var components = URLComponents(url: baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false)
@@ -70,14 +84,12 @@ actor APIClient {
     func get<T: Decodable>(_ path: String, query: [URLQueryItem] = [], enveloped: Bool) async throws -> T {
         var request = URLRequest(url: try url(for: path, query: query))
         request.httpMethod = HTTPMethod.get.rawValue
-        request.setValue(requestID, forHTTPHeaderField: "X-Request-ID")
+        request.setValue(newRequestID(), forHTTPHeaderField: "X-Request-ID")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         Self.clientHeaders.forEach { request.setValue($1, forHTTPHeaderField: $0) }
         Self.applyDeviceHeaders(to: &request)
 
-        let (data, response) = try await session.data(for: request)
-        try validate(response: response, data: data)
-        return try decode(data, enveloped: enveloped)
+        return try await transact(request) { try self.decode($0, enveloped: enveloped) }
     }
 
     /// Asserted requests go out one at a time across all clients: the server
@@ -104,14 +116,19 @@ actor APIClient {
     private func perform<T: Decodable>(_ method: HTTPMethod, _ path: String, body: Data, asserted: Bool) async throws -> T {
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
         request.httpMethod = method.rawValue
-        request.setValue(requestID, forHTTPHeaderField: "X-Request-ID")
+        request.setValue(newRequestID(), forHTTPHeaderField: "X-Request-ID")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         Self.clientHeaders.forEach { request.setValue($1, forHTTPHeaderField: $0) }
         Self.applyDeviceHeaders(to: &request)
         request.httpBody = body
 
-        guard asserted else { return try await execute(request) }
+        guard asserted else { return try await execute(request, asserted: false) }
+        // The lock spans the network call on purpose: the server rejects an
+        // App Attest counter lower than the last one it accepted, so a signed
+        // request must reach it before the next one is signed. That is also
+        // why the session's request timeout is short: one stuck request holds
+        // everything queued behind it.
         await Self.assertionLock.lock()
         do {
             // Signs the path as sent (what the server reads from the URL).
@@ -119,7 +136,7 @@ actor APIClient {
                 method: method.rawValue, path: request.url?.path ?? path, body: body) {
                 request.setValue(assertion, forHTTPHeaderField: "X-App-Assertion")
             }
-            let result: T = try await execute(request)
+            let result: T = try await execute(request, asserted: true)
             await Self.assertionLock.unlock()
             return result
         } catch {
@@ -128,22 +145,75 @@ actor APIClient {
         }
     }
 
-    private func execute<T: Decodable>(_ request: URLRequest) async throws -> T {
-        let (data, response) = try await session.data(for: request)
-        try validate(response: response, data: data)
-        return try decode(data, enveloped: true)
+    private func execute<T: Decodable>(_ request: URLRequest, asserted: Bool) async throws -> T {
+        try await transact(request, asserted: asserted) { try self.decode($0, enveloped: true) }
+    }
+
+    /// The single choke point for every request: runs it under a background
+    /// task assertion (so leaving the app mid-request doesn't kill it),
+    /// validates, parses, and reports failures as `api_error` events.
+    private func transact<T>(
+        _ request: URLRequest, asserted: Bool = false, _ parse: (Data) throws -> T
+    ) async throws -> T {
+        let started = ContinuousClock.now
+        do {
+            let session = self.session
+            let (data, response) = try await withBackgroundTask(name: "app.pickhour.api") {
+                try await session.data(for: request)
+            }
+            try validate(response: response, data: data)
+            return try parse(data)
+        } catch {
+            reportFailure(error, request: request, started: started, asserted: asserted)
+            throw error
+        }
+    }
+
+    /// Fire-and-forget: reporting must never delay or change the outcome of
+    /// the request (nor hold the assertion lock). Skips `/v1/events` itself
+    /// (loop), cancellations, and answers the app expects (404 `not_found`
+    /// on digest/nudge, 426 handled by the update screen).
+    private func reportFailure(_ error: Error, request: URLRequest, started: ContinuousClock.Instant, asserted: Bool) {
+        guard !UITestFixtures.isActive, !(error is CancellationError),
+              let url = request.url, url.path != "/v1/events" else { return }
+        var status = 0
+        var urlErrorCode: Int?
+        let code: String
+        if let api = error as? APIError {
+            status = api.problem.status
+            code = api.code
+            if (status == 404 && code == "not_found") || status == 426 || code == "upgrade_required" { return }
+        } else if let urlError = error as? URLError {
+            if urlError.code == .cancelled { return }
+            code = ErrorSummary.urlErrorName(urlError.code)
+            urlErrorCode = urlError.code.rawValue
+        } else if error is DecodingError {
+            code = "decode_error"
+        } else {
+            code = "other"
+        }
+        let elapsed = started.duration(to: .now)
+        let durationMs = Int(elapsed.components.seconds * 1000 + elapsed.components.attoseconds / 1_000_000_000_000_000)
+        let method = request.httpMethod ?? "GET"
+        let route = ApiErrorReporter.routeTemplate(url.path)
+        let requestId = request.value(forHTTPHeaderField: "X-Request-ID") ?? ""
+        Task.detached(priority: .utility) {
+            let background = await MainActor.run { AppActivity.isBackground }
+            await ApiErrorReporter.shared.report(ApiFailure(
+                method: method, route: route, status: status, code: code, urlError: urlErrorCode,
+                durationMs: durationMs, requestId: requestId, background: background, asserted: asserted))
+        }
     }
 
     func delete(_ path: String, query: [URLQueryItem] = []) async throws {
         var request = URLRequest(url: try url(for: path, query: query))
         request.httpMethod = HTTPMethod.delete.rawValue
-        request.setValue(requestID, forHTTPHeaderField: "X-Request-ID")
+        request.setValue(newRequestID(), forHTTPHeaderField: "X-Request-ID")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         Self.clientHeaders.forEach { request.setValue($1, forHTTPHeaderField: $0) }
         Self.applyDeviceHeaders(to: &request)
 
-        let (data, response) = try await session.data(for: request)
-        try validate(response: response, data: data)
+        try await transact(request) { _ in () }
     }
 
     func decode<T: Decodable>(_ data: Data, enveloped: Bool) throws -> T {

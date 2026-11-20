@@ -27,7 +27,7 @@ final class SpotDetailModel {
         do {
             forecast = try await forecastCall
         } catch {
-            Log.api.error("forecast failed: \(error.localizedDescription)")
+            Log.api.error("forecast failed: \(ErrorSummary.describe(error), privacy: .public)")
         }
     }
 

@@ -37,7 +37,7 @@ final class AlertsStore {
             isLoaded = true
             await loadNames()
         } catch {
-            Log.alerts.error("alerts load failed: \(error.localizedDescription)")
+            Log.alerts.error("alerts load failed: \(ErrorSummary.describe(error), privacy: .public)")
         }
     }
 
@@ -79,7 +79,7 @@ final class AlertsStore {
         do {
             try await api.deleteAlert(id: rule.id)
         } catch {
-            Log.alerts.error("alert delete failed: \(error.localizedDescription)")
+            Log.alerts.error("alert delete failed: \(ErrorSummary.describe(error), privacy: .public)")
             await load()
         }
     }
@@ -101,7 +101,7 @@ final class AlertsStore {
                 names[feature.properties.id] = SpotSummary(feature).displayName
             }
         } catch {
-            Log.alerts.error("alert names failed: \(error.localizedDescription)")
+            Log.alerts.error("alert names failed: \(ErrorSummary.describe(error), privacy: .public)")
         }
     }
 }

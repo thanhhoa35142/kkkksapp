@@ -120,7 +120,7 @@ final class MapModel {
             return
         } catch {
             self.error = error.localizedDescription
-            Log.api.error("map spots failed: \(error.localizedDescription)")
+            Log.api.error("map spots failed: \(ErrorSummary.describe(error), privacy: .public)")
         }
     }
 

@@ -144,7 +144,14 @@ struct BestNowProvider: TimelineProvider {
         }
     }
 
+    /// WidgetKit kills an extension that runs too long, and `load` makes up to
+    /// four sequential requests (8 s each). The optional hourly fetch is only
+    /// worth starting while the budget is mostly intact; without it the
+    /// widget still shows the single-entry view from the recommendations.
+    private static let hoursFetchDeadline: TimeInterval = 8
+
     private func load(now: Date = .now) async -> [BestNowEntry] {
+        let started = Date()
         guard let snapshot = WidgetBridge.load() else {
             return [BestNowEntry(date: now, placeName: "", hour: now, isNextMorning: false,
                                  state: .noPlace, usesMetric: true)]
@@ -162,7 +169,7 @@ struct BestNowProvider: TimelineProvider {
             let thisHour = calendar.dateInterval(of: .hour, for: now)?.start ?? now
             let hours = HourWindow.hours(from: thisHour, isPlus: isPlus, maxHours: 24, now: now, calendar: calendar)
             var series: [UUID: [ScoredHour]] = [:]
-            if hours >= 2 {
+            if hours >= 2, Date().timeIntervalSince(started) < Self.hoursFetchDeadline {
                 series = (try? await WidgetAPI.hours(snapshot, ids: result.items.map(\.id),
                                                      from: thisHour, hours: hours)) ?? [:]
             }
@@ -381,7 +388,7 @@ enum WidgetAPI {
         components.path = path
         components.queryItems = query
         guard let url = components.url else { throw URLError(.badURL) }
-        var request = URLRequest(url: url, timeoutInterval: 15)
+        var request = URLRequest(url: url, timeoutInterval: 8)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("pickhour-widget", forHTTPHeaderField: "X-Client")
         request.setValue(Locale.preferredLanguages.prefix(3).joined(separator: ","), forHTTPHeaderField: "Accept-Language")

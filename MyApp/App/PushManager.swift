@@ -29,7 +29,7 @@ final class PushManager {
             return try await UNUserNotificationCenter.current()
                 .requestAuthorization(options: [.alert, .sound, .badge])
         } catch {
-            Log.api.error("notification authorization failed: \(error.localizedDescription)")
+            Log.api.error("notification authorization failed: \(ErrorSummary.describe(error), privacy: .public)")
             return false
         }
     }
@@ -85,7 +85,7 @@ final class PushManager {
             ))
             Log.api.info("device registered for push, token \(token.prefix(8))…")
         } catch {
-            Log.api.error("device registration failed: \(error.localizedDescription)")
+            Log.api.error("device registration failed: \(ErrorSummary.describe(error), privacy: .public)")
         }
     }
 }

@@ -105,7 +105,7 @@ enum AppAttestor {
                 break
             }
         } catch {
-            Log.api.error("app attest failed: \(error.localizedDescription)")
+            Log.api.error("app attest failed: \(ErrorSummary.describe(error), privacy: .public)")
         }
         return false
     }
@@ -131,7 +131,7 @@ enum AppAttestor {
             forgetKey()
             return nil
         } catch {
-            Log.api.error("app assertion failed: \(error.localizedDescription)")
+            Log.api.error("app assertion failed: \(ErrorSummary.describe(error), privacy: .public)")
             return nil
         }
     }
