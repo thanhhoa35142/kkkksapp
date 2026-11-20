@@ -173,7 +173,7 @@ final class NudgeStore {
             }
             return true
         } catch {
-            Log.api.error("nudge save failed: \(error.localizedDescription)")
+            Log.api.error("nudge save failed: \(ErrorSummary.describe(error), privacy: .public)")
             return false
         }
     }
@@ -186,7 +186,7 @@ final class NudgeStore {
         } catch let error as APIError where error.code == "not_found" {
             return true
         } catch {
-            Log.api.error("nudge delete failed: \(error.localizedDescription)")
+            Log.api.error("nudge delete failed: \(ErrorSummary.describe(error), privacy: .public)")
             return false
         }
     }

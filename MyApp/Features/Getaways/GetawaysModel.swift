@@ -39,7 +39,7 @@ final class GetawaysModel {
         } catch let error as URLError where error.code == .cancelled {
             return
         } catch {
-            Log.api.error("getaways failed: \(error.localizedDescription)")
+            Log.api.error("getaways failed: \(ErrorSummary.describe(error), privacy: .public)")
             if list == nil { phase = .failed(LoadErrorMessage.text(for: error)) }
         }
     }
@@ -79,7 +79,7 @@ extension BestNowModel {
             weekendHint = WeekendHintState(city: city, key: key)
         } catch {
             // A bonus row: no error UI, retried on the next reload.
-            Log.api.error("getaways hint failed: \(error.localizedDescription)")
+            Log.api.error("getaways hint failed: \(ErrorSummary.describe(error), privacy: .public)")
         }
     }
 }

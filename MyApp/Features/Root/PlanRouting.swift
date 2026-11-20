@@ -18,6 +18,10 @@ struct PlanRouting: ViewModifier {
                 await app.planSync.sync(local: plans, context: context)
             }
             .onChange(of: scenePhase) { _, phase in
+                if phase == .background {
+                    Task { await app.flushEventsForBackground() }
+                    return
+                }
                 guard phase == .active else { return }
                 app.planSync.requestSync()
                 Task {

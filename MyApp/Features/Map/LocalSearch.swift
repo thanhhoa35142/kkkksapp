@@ -42,7 +42,7 @@ final class LocalSearch {
             let response = try await MKLocalSearch(request: request).start()
             return response.mapItems.first?.placemark.coordinate
         } catch {
-            Log.geo.error("local search failed: \(error.localizedDescription)")
+            Log.geo.error("local search failed: \(ErrorSummary.describe(error), privacy: .public)")
             return nil
         }
     }

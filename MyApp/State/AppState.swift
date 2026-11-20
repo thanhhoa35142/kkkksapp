@@ -288,7 +288,7 @@ final class AppState {
             ))
         } catch {
             lastDeviceRegisterAt = nil
-            Log.api.error("device register failed: \(error.localizedDescription)")
+            Log.api.error("device register failed: \(ErrorSummary.describe(error), privacy: .public)")
         }
     }
 
@@ -328,29 +328,44 @@ final class AppState {
             }
         } catch {
             lastVersionCheckAt = nil
-            Log.api.error("app config failed: \(error.localizedDescription)")
+            Log.api.error("app config failed: \(ErrorSummary.describe(error), privacy: .public)")
         }
     }
 
     /// Registers this install and loads the plan.
+    ///
+    /// Only the real dependencies are ordered: everything that needs the
+    /// device secret (entitlement, alerts, nudge, plan sync, events) waits for
+    /// `registerDevice()`; the version check doesn't, so it runs beside it.
+    /// After registration the independent steps overlap (all `@MainActor`, so
+    /// they interleave at their awaits) — a slow call no longer delays the
+    /// ones behind it, which matters when launch happens on a weak network.
     func bootstrap() async {
         let deviceID = DeviceIdentity.deviceID
-        await checkAppVersion()
+        async let versionCheck: Void = checkAppVersion()
         await registerDevice()
         if !UITestFixtures.isActive {
             Task.detached(priority: .utility) { [api] in await AppAttestor.attestIfNeeded(api: api) }
         }
+        listenForTransactions()
+        planSync.requestSync()
+
         // APNs can rotate the token (restore, reinstall, OS update); asking on
         // every launch hands the current one to handleDeviceToken, which
         // re-registers it. No prompt: only runs when already authorized.
-        await PushManager.shared.registerIfAuthorized()
-        await refreshEntitlement()
-        listenForTransactions()
-        await linkCurrentEntitlements()
-        await alerts.load()
-        planSync.requestSync()
-        await nudge.syncIfNeeded()
+        async let push: Void = PushManager.shared.registerIfAuthorized()
+        // Ordered pair: linking needs the freshly loaded entitlement (`isPlus`).
+        async let entitlementAndLink: Void = refreshAndLinkEntitlements()
+        async let alertRules: Void = alerts.load()
+        async let nudgeSync: Void = nudge.syncIfNeeded()
+        _ = await (versionCheck, push, entitlementAndLink, alertRules, nudgeSync)
+
         await EventQueue.shared.flush(client: api, deviceID: deviceID)
+    }
+
+    private func refreshAndLinkEntitlements() async {
+        await refreshEntitlement()
+        await linkCurrentEntitlements()
     }
 
     private var transactionListener: Task<Void, Never>?
@@ -371,7 +386,7 @@ final class AppState {
         do {
             entitlement = try await api.entitlement(deviceID: DeviceIdentity.deviceID)
         } catch {
-            Log.store.error("entitlement failed: \(error.localizedDescription)")
+            Log.store.error("entitlement failed: \(ErrorSummary.describe(error), privacy: .public)")
         }
     }
 
@@ -380,7 +395,7 @@ final class AppState {
         do {
             _ = try await api.linkTransaction(signedTransaction: jws)
         } catch {
-            Log.store.error("link transaction failed: \(error.localizedDescription)")
+            Log.store.error("link transaction failed: \(ErrorSummary.describe(error), privacy: .public)")
         }
         await refreshEntitlement()
     }
@@ -401,7 +416,7 @@ final class AppState {
                     signedTransaction: result.jwsRepresentation)
                 linked = true
             } catch {
-                Log.store.error("link current entitlement failed: \(error.localizedDescription)")
+                Log.store.error("link current entitlement failed: \(ErrorSummary.describe(error), privacy: .public)")
             }
         }
         if linked { await refreshEntitlement() }
@@ -410,7 +425,7 @@ final class AppState {
     /// Restore: re-syncs with the App Store and links current entitlements.
     func restorePurchases() async {
         do { try await AppStore.sync() } catch {
-            Log.store.error("AppStore.sync failed: \(error.localizedDescription)")
+            Log.store.error("AppStore.sync failed: \(ErrorSummary.describe(error), privacy: .public)")
         }
         for await result in Transaction.currentEntitlements {
             await link(signedTransaction: result.jwsRepresentation)
@@ -456,6 +471,17 @@ final class AppState {
 
     // MARK: - Analytics
 
+    /// Called when the app moves to the background: the queue is sent under a
+    /// background-task assertion, so a flush that started now isn't suspended
+    /// mid-request (and a short list of events isn't stranded until next launch).
+    func flushEventsForBackground() async {
+        let client = api
+        let deviceID = DeviceIdentity.deviceID
+        try? await withBackgroundTask(name: "app.pickhour.events") {
+            await EventQueue.shared.flush(client: client, deviceID: deviceID)
+        }
+    }
+
     func track(_ name: String, _ props: [String: JSONValue]? = nil) {
         Task { await EventQueue.shared.enqueue(AppEvent(name: name, props: props)) }
     }
@@ -466,7 +492,7 @@ final class AppState {
     func deleteMyData() async {
         let id = DeviceIdentity.deviceID
         do { try await api.deleteDevice(id: id) } catch {
-            Log.api.error("delete device failed: \(error.localizedDescription)")
+            Log.api.error("delete device failed: \(ErrorSummary.describe(error), privacy: .public)")
         }
         await EventQueue.shared.clear()
         KeychainStore.delete(.deviceID)

@@ -61,7 +61,7 @@ final class PlanSyncStore {
         do {
             items = try await api.plans()
         } catch {
-            Log.api.error("plans load failed: \(error.localizedDescription)")
+            Log.api.error("plans load failed: \(ErrorSummary.describe(error), privacy: .public)")
             return
         }
         guard creating == 0 else { return }
@@ -134,7 +134,7 @@ final class PlanSyncStore {
         } catch let error as APIError where error.code == "plan_limit" {
             return .needsPlus
         } catch {
-            Log.api.error("plan create failed: \(error.localizedDescription)")
+            Log.api.error("plan create failed: \(ErrorSummary.describe(error), privacy: .public)")
             return .failed(PlanErrorMessage.text(for: error, context: .create))
         }
     }
@@ -150,7 +150,7 @@ final class PlanSyncStore {
         } catch let error as APIError where error.code == "not_found" {
             // Not on the server any more: nothing to cancel.
         } catch {
-            Log.api.error("plan cancel failed: \(error.localizedDescription)")
+            Log.api.error("plan cancel failed: \(ErrorSummary.describe(error), privacy: .public)")
             return .failed(PlanErrorMessage.text(for: error, context: .cancel))
         }
         if !plan.isDeleted { plan.clearSync() }
@@ -173,7 +173,7 @@ final class PlanSyncStore {
         } catch let error as APIError where error.code == "not_found" {
             // Already gone.
         } catch {
-            Log.api.error("plan cancel failed, retried next sync: \(error.localizedDescription)")
+            Log.api.error("plan cancel failed, retried next sync: \(ErrorSummary.describe(error), privacy: .public)")
             return
         }
         pendingCancels.remove(id)
@@ -195,7 +195,7 @@ final class PlanSyncStore {
         } catch let error as APIError where error.code == "own_plan" {
             return .ownPlan
         } catch {
-            Log.api.error("plan follow failed: \(error.localizedDescription)")
+            Log.api.error("plan follow failed: \(ErrorSummary.describe(error), privacy: .public)")
             return .failed(PlanErrorMessage.text(for: error, context: .follow))
         }
     }
@@ -204,7 +204,7 @@ final class PlanSyncStore {
     func unfollow(token: String) async {
         followed.removeAll { $0.shareToken == token }
         do { try await api.unfollowPlan(token: token) } catch {
-            Log.api.error("plan unfollow failed: \(error.localizedDescription)")
+            Log.api.error("plan unfollow failed: \(ErrorSummary.describe(error), privacy: .public)")
         }
     }
 

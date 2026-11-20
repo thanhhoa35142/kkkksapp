@@ -152,7 +152,7 @@ final class BestNowModel {
             guard isCurrent(gen) else { return }
             // Keep stale rows visible when we have them (offline state).
             phase = items.isEmpty ? .failed(LoadErrorMessage.text(for: error)) : .loaded
-            Log.api.error("recommendations failed: \(error.localizedDescription)")
+            Log.api.error("recommendations failed: \(ErrorSummary.describe(error), privacy: .public)")
         }
     }
 
@@ -172,7 +172,7 @@ final class BestNowModel {
             return
         } catch {
             if weatherFetch?.key != key { weather = [] }
-            Log.api.error("nearby weather failed: \(error.localizedDescription)")
+            Log.api.error("nearby weather failed: \(ErrorSummary.describe(error), privacy: .public)")
         }
     }
 
@@ -210,7 +210,7 @@ final class BestNowModel {
         } catch let error as URLError where error.code == .cancelled {
             return
         } catch {
-            Log.api.error("best now hours failed: \(error.localizedDescription)")
+            Log.api.error("best now hours failed: \(ErrorSummary.describe(error), privacy: .public)")
         }
     }
 

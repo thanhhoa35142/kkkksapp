@@ -180,7 +180,7 @@ final class PlanStatusModel {
         await withTaskGroup(of: (UUID, [ScoredHour]?).self) { group in
             for id in spotIDs {
                 group.addTask {
-                    let points = try? await AppConfig.apiClient.forecast(spotID: id)
+                    let points = try? await ForecastCache.shared.forecast(spotID: id)
                     return (id, points?.map { ScoredHour(tsHour: $0.tsHour, score: $0.score, capReason: $0.capReason) })
                 }
             }

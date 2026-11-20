@@ -23,7 +23,7 @@ final class SavedScoresModel {
             }
             scores = result
         } catch {
-            Log.api.error("saved scores failed: \(error.localizedDescription)")
+            Log.api.error("saved scores failed: \(ErrorSummary.describe(error), privacy: .public)")
         }
     }
 

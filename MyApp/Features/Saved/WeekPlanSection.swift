@@ -21,7 +21,7 @@ final class WeekendDigestModel {
             sentIDs = Set(digest?.spotIds ?? [])
             isLoaded = true
         } catch {
-            Log.api.error("digest load failed: \(error.localizedDescription)")
+            Log.api.error("digest load failed: \(ErrorSummary.describe(error), privacy: .public)")
         }
     }
 
@@ -44,7 +44,7 @@ final class WeekendDigestModel {
             app.paywall = .planner
         } catch {
             enabled = previous
-            Log.api.error("digest save failed: \(error.localizedDescription)")
+            Log.api.error("digest save failed: \(ErrorSummary.describe(error), privacy: .public)")
         }
     }
 
@@ -57,7 +57,7 @@ final class WeekendDigestModel {
             // request too so we don't resend on every appearance.
             sentIDs = Set(digest.spotIds).union(spotIDs)
         } catch {
-            Log.api.error("digest sync failed: \(error.localizedDescription)")
+            Log.api.error("digest sync failed: \(ErrorSummary.describe(error), privacy: .public)")
         }
     }
 }

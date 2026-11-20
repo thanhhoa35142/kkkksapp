@@ -14,6 +14,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
+        #if canImport(MetricKit)
+        DiagnosticsReporter.shared.start()
+        #endif
         return true
     }
 
@@ -28,7 +31,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
-        Log.api.error("APNs registration failed: \(error.localizedDescription)")
+        Log.api.error("APNs registration failed: \(ErrorSummary.describe(error), privacy: .public)")
     }
 }
 #elseif os(macOS)
@@ -48,7 +51,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ application: NSApplication,
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
-        Log.api.error("APNs registration failed: \(error.localizedDescription)")
+        Log.api.error("APNs registration failed: \(ErrorSummary.describe(error), privacy: .public)")
     }
 }
 #endif

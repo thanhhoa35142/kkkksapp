@@ -34,7 +34,15 @@ actor EventQueue {
 
     /// Sends queued events in batches. Stops at the first failure so ordering
     /// is preserved and unsent events stay queued.
+    /// The actor is reentrant at the network await: without this, a launch
+    /// flush and a going-to-background flush could send the same batch twice
+    /// and then each drop it, removing events that were never sent.
+    private var isFlushing = false
+
     func flush(client: APIClient, deviceID: UUID) async {
+        guard !isFlushing else { return }
+        isFlushing = true
+        defer { isFlushing = false }
         while !pending.isEmpty {
             let batch = Array(pending.prefix(Self.maxBatch))
             do {
@@ -42,7 +50,7 @@ actor EventQueue {
                 pending.removeFirst(batch.count)
                 persist()
             } catch {
-                Log.events.error("event flush failed, \(self.pending.count) still queued: \(error.localizedDescription)")
+                Log.events.error("event flush failed, \(self.pending.count) still queued: \(ErrorSummary.describe(error), privacy: .public)")
                 return
             }
         }
