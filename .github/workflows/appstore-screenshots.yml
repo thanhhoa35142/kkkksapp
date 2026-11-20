@@ -1,9 +1,13 @@
 name: appstore-screenshots
 
-# App Store screenshot sets, refreshable without a PR to main:
+# UI tests and App Store screenshot sets. Not part of ci.yml (compile checks
+# only): run when screens change, by pushing a feat/appstore-screenshots*
+# branch, or by hand once this file is on main. Sets:
 #   iphone-6.3   the required iPhone class (Dynamic Island, medium display):
 #                1206 × 2622 from an iPhone Pro simulator.
-#   ipad-13      iPad 13-inch, landscape 2752 × 2064 (also made by ci.yml).
+#   ipad-13      iPad 13-inch, landscape 2752 × 2064.
+#   mac          native Mac window shots on a 1280 × 800 canvas.
+#   ui-tests     LayoutTests and smoke tests (no screenshots).
 #   iphone-duo   iPhone Duo (foldable): outer 1398 × 2034, inner 2007 × 2853.
 #                Needs Xcode 27.1+ (the first SDK with the Duo simulator).
 # Runs on demand and on pushes to feat/appstore-screenshots*, so the sets can
@@ -132,6 +136,117 @@ jobs:
           name: ipad-13-screenshots
           path: build/ipad-13/*.png
           if-no-files-found: warn
+          retention-days: 14
+
+  # Native Mac app window shots, padded to 1280 × 800 (moved from ci.yml).
+  mac:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+          xcodebuild -version
+
+      - name: Screenshots
+        run: |
+          xcodebuild \
+            -project MyApp.xcodeproj \
+            -scheme MyApp \
+            -destination 'platform=macOS' \
+            -configuration Debug \
+            -only-testing:MyAppUITests/MacScreenshotTests \
+            -resultBundlePath build/mac.xcresult \
+            -xcconfig ci/mac-screenshots.xcconfig \
+            test
+
+      - name: Export screenshots
+        if: ${{ !cancelled() && hashFiles('build/mac.xcresult/Info.plist') != '' }}
+        run: |
+          mkdir -p build/mac-screenshots
+          xcrun xcresulttool export attachments \
+            --path build/mac.xcresult --output-path build/mac-screenshots
+          python3 scripts/rename-screenshots.py build/mac-screenshots \
+            || echo "rename failed: keeping the exported file names"
+
+      # The runner's screen (1024 × 768) caps the window below every App
+      # Store Mac size, so each window shot is centred on a 1280 × 800
+      # canvas (App Store's smallest Mac size) in macOS window-background
+      # gray. A shot already larger is left as it is and fails the check.
+      - name: App Store Mac screenshots (1280 × 800)
+        if: ${{ !cancelled() && hashFiles('build/mac-screenshots/*.png') != '' }}
+        run: |
+          mkdir -p build/mac-appstore
+          for f in build/mac-screenshots/[0-9][0-9]*.png; do
+            sips --padToHeightWidth 800 1280 --padColor ECECEC "$f" \
+              --out "build/mac-appstore/$(basename "$f")" >/dev/null \
+              || cp "$f" build/mac-appstore/
+          done
+          # App Store Connect refuses screenshots with an alpha channel.
+          python3 scripts/strip-alpha.py build/mac-appstore/*.png
+          python3 scripts/check-screenshot-sizes.py build/mac-appstore 1280x800
+
+      - name: Upload screenshots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-screenshots
+          path: build/mac-screenshots/*.png
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload App Store Mac screenshots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-appstore-screenshots
+          path: build/mac-appstore/*.png
+          if-no-files-found: warn
+          retention-days: 14
+
+  # The layout checks and smoke tests that used to run on every PR (moved
+  # from ci.yml): run them with the screenshots when screens change.
+  ui-tests:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+          xcodebuild -version
+
+      - name: UI tests
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 scripts/pick-simulator.py iPhone)
+          echo "Simulator: $UDID"
+          xcodebuild \
+            -project MyApp.xcodeproj -scheme MyApp \
+            -destination "id=$UDID" -configuration Debug \
+            -resultBundlePath build/ui.xcresult \
+            -skip-testing:MyAppUITests/MacScreenshotTests \
+            -skip-testing:MyAppUITests/PhoneScreenshotTests \
+            -skip-testing:MyAppUITests/PadScreenshotTests \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            test
+
+      - name: Export failure screenshots
+        if: ${{ failure() && hashFiles('build/ui.xcresult/Info.plist') != '' }}
+        run: |
+          mkdir -p build/ui-failures
+          xcrun xcresulttool export attachments \
+            --path build/ui.xcresult --output-path build/ui-failures --only-failures
+          python3 scripts/rename-screenshots.py build/ui-failures \
+            || echo "rename failed: keeping the exported file names"
+
+      - name: Upload failure screenshots
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-failure-screenshots
+          path: build/ui-failures
+          if-no-files-found: ignore
           retention-days: 14
 
   # First pass: Apple does not document the simulator name or a command-line
