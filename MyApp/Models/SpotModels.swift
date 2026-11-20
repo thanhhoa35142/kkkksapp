@@ -102,4 +102,16 @@ struct ForecastPoint: Decodable {
     let capReason: String?
     let reasons: [Reason]
     let confidence: Int
+    /// Raw provider forecast behind the score (metric). Absent when the hour
+    /// has no weather row; each value is nil when the provider had none.
+    let weather: Weather?
+
+    struct Weather: Decodable {
+        let tempC: Double?
+        let feelsLikeC: Double?
+        let precipProb: Int?
+        let windKmh: Double?
+        let uv: Double?
+        let cloud: Int?
+    }
 }

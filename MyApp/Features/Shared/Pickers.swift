@@ -52,41 +52,96 @@ struct WhenPickerSheet: View {
         return date <= Date.now.startOfHour ? .now : .at(date)
     }
 
-    var body: some View {
-        NavigationStack {
-            Form {
-                DatePicker("Day", selection: $day, in: range, displayedComponents: .date)
-                    .datePickerStyle(.graphical)
-                Picker("Hour", selection: $hour) {
-                    ForEach(0..<24, id: \.self) { h in
-                        let date = Calendar.current.date(bySettingHour: h, minute: 0, second: 0, of: day) ?? day
-                        Text(Format.hour(date)).tag(h)
-                    }
-                }
-                if selection.needsPlus() && !app.isPlus {
-                    Section {
-                        Label("Hourly scores after tomorrow need Plus", systemImage: "lock.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-            .formStyle(.grouped)
-            .navigationTitle("Choose a Time")
-            .inlineTitle()
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        dismiss()
-                        app.select(when: selection)
-                    }
-                }
+    /// The 7 days on offer, as start-of-day dates.
+    private var days: [Date] {
+        (0..<7).compactMap { Calendar.current.date(byAdding: .day, value: $0, to: range.lowerBound) }
+    }
+
+    private func dayLabel(_ date: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) { return String(localized: "Today") }
+        if calendar.isDateInTomorrow(date) { return String(localized: "Tomorrow") }
+        return date.formatted(.dateTime.weekday(.abbreviated).day())
+    }
+
+    private var hourPicker: some View {
+        Picker("Hour", selection: $hour) {
+            ForEach(0..<24, id: \.self) { h in
+                let date = Calendar.current.date(bySettingHour: h, minute: 0, second: 0, of: day) ?? day
+                Text(Format.hour(date)).tag(h)
             }
         }
-        .presentationDetents([.large])
     }
+
+    private var plusNote: some View {
+        Label("Hourly scores after tomorrow need Plus", systemImage: "lock.fill")
+            .foregroundStyle(.secondary)
+    }
+
+    var body: some View {
+        NavigationStack {
+            content
+                .navigationTitle("Choose a Time")
+                .inlineTitle()
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { dismiss() }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") {
+                            dismiss()
+                            app.select(when: selection)
+                        }
+                    }
+                }
+        }
+        #if os(iOS)
+        // Half height: the wheels sit in thumb reach, no empty space below.
+        .presentationDetents([.medium])
+        #else
+        .presentationDetents([.large])
+        #endif
+    }
+
+    #if os(iOS)
+    /// Day | Hour wheels side by side, like the system's date-and-time
+    /// wheels. Only 7 days are on offer, so a month calendar (mostly
+    /// disabled dates, high on the screen) is not needed.
+    private var content: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 0) {
+                Picker("Day", selection: $day) {
+                    ForEach(days, id: \.self) { date in
+                        Text(dayLabel(date)).tag(date)
+                    }
+                }
+                hourPicker
+            }
+            .pickerStyle(.wheel)
+            .labelsHidden()
+            if selection.needsPlus() && !app.isPlus {
+                plusNote.font(.footnote)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal)
+        .frame(maxWidth: .infinity)
+        .background(Color.groupedBackground)
+    }
+    #else
+    /// Mac: the month calendar suits a pointer.
+    private var content: some View {
+        Form {
+            DatePicker("Day", selection: $day, in: range, displayedComponents: .date)
+                .datePickerStyle(.graphical)
+            hourPicker
+            if selection.needsPlus() && !app.isPlus {
+                Section { plusNote }
+            }
+        }
+        .formStyle(.grouped)
+    }
+    #endif
 }
 
 /// Toolbar menu: where Best Now looks.
@@ -104,6 +159,7 @@ struct PlaceMenu: View {
             }
             .disabled(app.location.isDenied)
             Button("Choose a City…") { showCityPicker = true }
+            Button("Where's Nice This Weekend?") { app.getawaysSource = .placeMenu }
         } label: {
             Text(app.place?.title ?? String(localized: "Choose Place"))
                 .lineLimit(1)
@@ -113,10 +169,14 @@ struct PlaceMenu: View {
 
 /// City packs grouped by country (UI_SPEC S12 / onboarding "Choose a City").
 struct CityPickerList: View {
+    /// Adds the "Great This Weekend" section on top (not in onboarding).
+    var showsGetaways = false
     var onPicked: () -> Void
 
     @Environment(AppState.self) private var app
     @State private var query = ""
+    @State private var weekend = GetawaysModel()
+    @State private var trackedSection = false
 
     private var grouped: [(country: String, packs: [CityPack])] {
         let filtered = app.packs.filter {
@@ -133,20 +193,7 @@ struct CityPickerList: View {
 
     var body: some View {
         List {
-            if app.packs.isEmpty {
-                if let error = app.packsError {
-                    ContentUnavailableView {
-                        Label("Can't load cities", systemImage: "wifi.slash")
-                    } description: {
-                        Text(error)
-                    } actions: {
-                        Button("Try Again") { Task { await app.loadPacksIfNeeded() } }
-                    }
-                } else {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                }
-            }
+            weekendSection
             ForEach(grouped, id: \.country) { group in
                 Section(group.country) {
                     ForEach(group.packs) { pack in
@@ -168,10 +215,68 @@ struct CityPickerList: View {
             }
         }
         .groupedList()
+        // Loading / failed: full-screen system states over the empty list.
+        .overlay {
+            if app.packs.isEmpty {
+                if let error = app.packsError {
+                    ContentUnavailableView {
+                        Label("Can't load cities", systemImage: "wifi.slash")
+                    } description: {
+                        Text(error)
+                    } actions: {
+                        Button("Try Again") { Task { await app.loadPacksIfNeeded() } }
+                    }
+                } else {
+                    ProgressView()
+                }
+            } else if grouped.isEmpty {
+                ContentUnavailableView.search(text: query)
+            }
+        }
         .navigationTitle("Choose a City")
         .inlineTitle()
         .searchable(text: $query, prompt: "City or country")
         .task { await app.loadPacksIfNeeded() }
+        .task(id: app.isPlus) { await loadWeekend() }
+    }
+
+    // MARK: Great This Weekend
+
+    /// The 3 best cities this weekend. Hidden while searching, and when the
+    /// forecast can't load or has no good window anywhere.
+    @ViewBuilder
+    private var weekendSection: some View {
+        let cities = Array(weekend.items.prefix(GetawayRules.sectionCount))
+        if showsGetaways, query.isEmpty, !app.packs.isEmpty, !cities.isEmpty {
+            Section {
+                ForEach(Array(cities.enumerated()), id: \.element.id) { index, city in
+                    Button {
+                        GetawayNavigation.open(city, rank: index + 1, source: "cityPicker", app: app)
+                        onPicked()
+                    } label: {
+                        GetawayRow(city: city,
+                                   distanceMeters: GetawayRules.distanceMeters(from: app.location.coordinate, to: city),
+                                   isHome: city.slug == homeSlug)
+                    }
+                    .tint(.primary)
+                }
+            } header: {
+                Text("Great This Weekend")
+            }
+        }
+    }
+
+    private var homeSlug: String? {
+        GetawayRules.homeSlug(place: app.place, packs: app.packs, fix: app.location.coordinate)
+    }
+
+    private func loadWeekend() async {
+        guard showsGetaways, let range = GetawayRules.range(for: .thisWeekend) else { return }
+        await weekend.load(range: range, isPlus: app.isPlus)
+        let count = min(weekend.items.count, GetawayRules.sectionCount)
+        guard count > 0, !trackedSection else { return }
+        trackedSection = true
+        app.track("getaways_section_shown", ["count": .number(Double(count))])
     }
 }
 

@@ -11,7 +11,7 @@ enum JSONValue: Codable {
 
     init(from decoder: Decoder) throws {
         let single = try? decoder.singleValueContainer()
-        if let container = single, (try? container.decodeNil()) == true {
+        if let container = single, container.decodeNil() {
             self = .null
             return
         }

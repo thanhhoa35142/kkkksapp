@@ -33,11 +33,11 @@ final class AlertsStore {
 
     func load() async {
         do {
-            rules = try await api.alerts(deviceID: DeviceIdentity.deviceID)
+            rules = try await api.alerts()
             isLoaded = true
             await loadNames()
         } catch {
-            Log.alerts.error("alerts load failed: \(error.localizedDescription)")
+            Log.alerts.error("alerts load failed: \(ErrorSummary.describe(error), privacy: .public)")
         }
     }
 
@@ -64,7 +64,7 @@ final class AlertsStore {
         } catch let error as APIError where error.code == "plan_limit" {
             return .needsPlus
         } catch {
-            return .failed(error.localizedDescription)
+            return .failed(LoadErrorMessage.text(for: error))
         }
     }
 
@@ -77,9 +77,9 @@ final class AlertsStore {
         rules.removeAll { $0.id == rule.id }
         if areaNames.removeValue(forKey: rule.id) != nil { AreaNames.save(areaNames) }
         do {
-            try await api.deleteAlert(id: rule.id, deviceID: DeviceIdentity.deviceID)
+            try await api.deleteAlert(id: rule.id)
         } catch {
-            Log.alerts.error("alert delete failed: \(error.localizedDescription)")
+            Log.alerts.error("alert delete failed: \(ErrorSummary.describe(error), privacy: .public)")
             await load()
         }
     }
@@ -101,7 +101,7 @@ final class AlertsStore {
                 names[feature.properties.id] = SpotSummary(feature).displayName
             }
         } catch {
-            Log.alerts.error("alert names failed: \(error.localizedDescription)")
+            Log.alerts.error("alert names failed: \(ErrorSummary.describe(error), privacy: .public)")
         }
     }
 }
@@ -121,7 +121,7 @@ private enum AreaNames {
 
 extension AlertRuleRequest {
     init(rule: AlertRule, enabled: Bool) {
-        self.init(deviceId: rule.deviceId, spotId: rule.spotId, h3Cell: rule.h3Cell, radiusM: rule.radiusM,
+        self.init(spotId: rule.spotId, h3Cell: rule.h3Cell, radiusM: rule.radiusM,
                   minScore: rule.minScore, daysMask: rule.daysMask, startLocal: rule.startLocal,
                   endLocal: rule.endLocal, tz: rule.tz, enabled: enabled)
     }

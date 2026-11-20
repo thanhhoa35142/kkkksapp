@@ -16,20 +16,61 @@ struct RootView: View {
                 PaywallSheet(reason: reason)
             }
             .paywallSurvey()
+            .modifier(WidgetPlanSync())
+            .modifier(PlanRouting())
+            .modifier(NudgeHomeSync())
             .onboardingCover(isPresented: Binding(
                 get: { !onboardingDone },
                 set: { if !$0 { onboardingDone = true } }
             ), fullScreen: isCompact)
             .onChange(of: DeepLinkRouter.shared.pendingSpotID) { _, newValue in
                 guard newValue != nil, let id = DeepLinkRouter.shared.consume() else { return }
+                // Good-day push: the best window's hour, if still usable.
+                if let raw = DeepLinkRouter.shared.consumeHour(),
+                   let hour = PlanLink.usableHour(raw, isPlus: app.isPlus) {
+                    app.detailFocus = AppState.DetailFocus(spotID: id, hour: hour)
+                    app.select(when: .at(hour))
+                }
                 app.selectedTab = .map
                 app.open(spotID: id, focusMap: true)
             }
-            .onOpenURL { url in
-                guard let id = SpotLink.spotID(from: url) else { return }
-                app.track("deep_link_opened", ["host": .string(url.host ?? "")])
-                DeepLinkRouter.shared.handle(spotID: id)
+            .onOpenURL { url in openLink(url) }
+            // Universal links (share page) can arrive as a browsing activity.
+            .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                if let url = activity.webpageURL { openLink(url) }
             }
+    }
+
+    /// Plan links open the plan sheet. Spot links, optionally at an hour (`?at=`, `PlanLink`) and tagged
+    /// `src=widget` by the widget. An hour that is past, too far out or
+    /// (Free) after tomorrow is ignored: the spot opens at the current "When".
+    private func openLink(_ url: URL) {
+        // Plan links (`/p/<token>`, `pickhour://plan/<token>`) before spot
+        // links; the token's shape is checked before any request.
+        if let token = PlanShareLink.token(from: url) {
+            app.track("shared_plan_link_opened")
+            app.planSheet = .shared(token: token)
+            return
+        }
+        let id = SpotLink.spotID(from: url)
+        let fromWidget = PlanLink.source(of: url) == PlanLink.widgetSource
+        if fromWidget {
+            app.track("widget_opened", ["hasSpot": .bool(id != nil)])
+        }
+        guard let id else { return }
+        app.track("deep_link_opened", ["host": .string(url.host ?? "")])
+        if let raw = PlanLink.hour(in: url) {
+            let hour = PlanLink.usableHour(raw, isPlus: app.isPlus)
+            if let hour {
+                // Before the selection, so the detail finds it when it opens.
+                app.detailFocus = AppState.DetailFocus(spotID: id, hour: hour)
+                app.select(when: .at(hour))
+            }
+            if !fromWidget {
+                app.track("plan_link_opened", ["usable": .bool(hour != nil)])
+            }
+        }
+        DeepLinkRouter.shared.handle(spotID: id)
     }
 
     private var isCompact: Bool {

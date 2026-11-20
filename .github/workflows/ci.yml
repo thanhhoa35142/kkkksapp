@@ -6,10 +6,24 @@ on:
   pull_request:
     branches: [main]
 
-jobs:
-  build:
-    runs-on: macos-15
+# A new commit on the same branch / PR cancels the run still going for the
+# previous one: only the latest commit's result matters, and macOS minutes
+# are expensive (x10 on a private repo).
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
+# Compile checks only (2026-11-20): the UI tests (LayoutTests, the
+# screenshot suites) took ~30 min per run and had been green across many
+# runs, so they moved to appstore-screenshots.yml, run when screens change.
+# `build-for-testing` still compiles the UI test target, so it can't rot.
+#   ios           ~6 min   app + widget + UI test target, iOS Simulator
+#   macos         ~5 min   native Mac app + UI test target
+#   translations  ~3 min   every string translated (nl, de, es) + color contrast
+
+jobs:
+  ios:
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
@@ -18,7 +32,7 @@ jobs:
           sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
           xcodebuild -version
 
-      - name: Build iOS/iPadOS (compile check, no signing)
+      - name: Build iOS
         run: |
           xcodebuild \
             -project MyApp.xcodeproj \
@@ -27,20 +41,53 @@ jobs:
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            build
+            build-for-testing
 
-      # Native macOS destination of the same target (not Catalyst).
-      - name: Build macOS (compile check, no signing)
+  # Native Mac app (same target, not Catalyst). Signing overrides:
+  # ci/mac-screenshots.xcconfig.
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+          xcodebuild -version
+
+      - name: Build macOS
         run: |
           xcodebuild \
             -project MyApp.xcodeproj \
             -scheme MyApp \
-            -destination 'generic/platform=macOS' \
+            -destination 'platform=macOS' \
             -configuration Debug \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            build
+            -xcconfig ci/mac-screenshots.xcconfig \
+            build-for-testing
 
-      # TODO: add `xcodebuild test` once the suite has real tests — needs a
-      # concrete simulator destination, e.g.
-      #   -destination 'platform=iOS Simulator,name=iPhone 16'
+  # Every string Xcode extracts from the code must be translated for the
+  # shipped languages (catches new or reworded strings).
+  translations:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+          xcodebuild -version
+
+      - name: Check translations (nl, de, es)
+        run: |
+          xcodebuild -exportLocalizations \
+            -project MyApp.xcodeproj \
+            -localizationPath build/loc \
+            -exportLanguage nl -exportLanguage de -exportLanguage es \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+          python3 scripts/check-translations.py build/loc
+
+      # The app's own colors against every background they are drawn on
+      # (WCAG AA 4.5:1). Replaces the UI-test audit's contrast check.
+      - name: Check color contrast
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check-contrast.py

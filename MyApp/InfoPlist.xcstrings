@@ -1,0 +1,126 @@
+{
+  "sourceLanguage" : "en",
+  "version" : "1.0",
+  "strings" : {
+    "NSLocationWhenInUseUsageDescription" : {
+      "comment" : "Location permission prompt.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pickhour uses your location to show nearby picnic spots and the best time to visit."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pickhour gebruikt je locatie om picknickplekken in de buurt en het beste moment om te gaan te tonen."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pickhour verwendet deinen Standort, um Picknickplätze in der Nähe und die beste Zeit für einen Besuch zu zeigen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pickhour usa tu ubicación para mostrar sitios de pícnic cercanos y el mejor momento para ir."
+          }
+        }
+      }
+    },
+    "NSLocationUsageDescription" : {
+      "comment" : "Location permission prompt.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pickhour uses your location to show nearby picnic spots and the best time to visit."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pickhour gebruikt je locatie om picknickplekken in de buurt en het beste moment om te gaan te tonen."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pickhour verwendet deinen Standort, um Picknickplätze in der Nähe und die beste Zeit für einen Besuch zu zeigen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pickhour usa tu ubicación para mostrar sitios de pícnic cercanos y el mejor momento para ir."
+          }
+        }
+      }
+    },
+    "CFBundleName" : {
+      "comment" : "App name (Mac menu bar, Home Screen). Brand: not translated.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pickhour"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pickhour"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pickhour"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pickhour"
+          }
+        }
+      }
+    },
+    "CFBundleDisplayName" : {
+      "comment" : "App name (Mac menu bar, Home Screen). Brand: not translated.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pickhour"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pickhour"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pickhour"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pickhour"
+          }
+        }
+      }
+    }
+  }
+}

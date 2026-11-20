@@ -3,6 +3,9 @@ import SwiftUI
 /// S9 · "Is this spot correct?" — preset answers only, no free text (spec D5).
 struct ReportSheet: View {
     let spotID: UUID
+    /// Called after a report went through — Spot Detail shows the
+    /// confirmation (M5) where the user lands, since this sheet closes.
+    var onSent: () -> Void = {}
 
     @Environment(\.dismiss) private var dismiss
     @State private var isSending = false
@@ -59,6 +62,7 @@ struct ReportSheet: View {
             try await AppConfig.apiClient.submitSpotReport(
                 spotID: spotID, deviceID: DeviceIdentity.deviceID, type: kind.rawValue)
             sent += 1
+            onSent()
             dismiss()
         } catch let apiError as APIError where apiError.code == "rate_limited" {
             error = String(localized: "You've sent a lot of reports today. Try again tomorrow.")

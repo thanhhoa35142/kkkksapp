@@ -22,18 +22,20 @@ struct WeekStrip: View {
     var body: some View {
         if dynamicTypeSize.isAccessibilitySize {
             VStack(spacing: 0) {
-                ForEach(days) { day in
+                ForEach(Array(days.enumerated()), id: \.element.id) { index, day in
                     Button { onSelect(day) } label: { row(day) }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("weekStrip.day.\(index)")
                     if day.id != days.last?.id { Divider() }
                 }
             }
         } else {
             HStack(spacing: 0) {
-                ForEach(days) { day in
+                ForEach(Array(days.enumerated()), id: \.element.id) { index, day in
                     Button { onSelect(day) } label: { column(day) }
                         .buttonStyle(.plain)
                         .frame(maxWidth: .infinity)
+                        .accessibilityIdentifier("weekStrip.day.\(index)")
                 }
             }
         }
@@ -47,7 +49,9 @@ struct WeekStrip: View {
                 .foregroundStyle(isSelected ? Color.primary : Color.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-            ScoreBadge(score: day.best?.score, diameter: 32)
+            // 36 pt (≈ 13 pt number), grows a little with Dynamic Type but
+            // stays inside a 1/7 column on a 375 pt phone.
+            ScoreBadge(score: day.best?.score, diameter: 36, maxTypeScale: 1.15)
             Group {
                 if day.locked {
                     Image(systemName: "lock.fill")

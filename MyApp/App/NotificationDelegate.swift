@@ -14,20 +14,33 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
         [.banner, .sound, .badge]
     }
 
-    /// Notification tapped — route to the spot if the payload carries one.
+    /// Notification tapped — route by payload (`NotificationRoute`).
     /// Payload contract (backend notifier.Payload): top-level "kind",
     /// "spotId", "score", "windowStart" next to "aps". Kinds: "alert.window"
-    /// (score alert, + "ruleId") and "digest.weekend" (Thursday plan, + "windowEnd").
+    /// (score alert, + "ruleId"), "digest.weekend" (Thursday plan, + "windowEnd"),
+    /// "nudge.goodday" (good-day tip, + "slot" "day" | "weekend", "windowEnd";
+    /// opens the spot at "windowStart"), "plan.changed" / "plan.confirmed"
+    /// (+ "planId", "shareToken", window, state).
+    /// Copy is not in the payload: "aps.alert" carries `title-loc-key` /
+    /// `loc-key` / `loc-args`, resolved from Localizable.xcstrings (`push.*`).
+    /// Every routed tap is tracked as `push_opened` with the kind.
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
+        // Read the payload here; only Sendable values cross to the main actor.
         let userInfo = response.notification.request.content.userInfo
-        guard let kind = userInfo["kind"] as? String,
-              ["alert.window", "digest.weekend"].contains(kind) else { return }
-        let spotID = (userInfo["spotId"] as? String).flatMap(UUID.init(uuidString:))
+        guard let route = NotificationRoute.route(userInfo) else { return }
+        // Kind only (a known one: it routed) — no spot, place or time.
+        if let kind = userInfo["kind"] as? String {
+            await EventQueue.shared.enqueue(AppEvent(name: "push_opened", props: ["kind": .string(kind)]))
+        }
         await MainActor.run {
-            DeepLinkRouter.shared.handle(spotID: spotID)
+            switch route {
+            case .spot(let spotID): DeepLinkRouter.shared.handle(spotID: spotID)
+            case .spotAt(let spotID, let hour): DeepLinkRouter.shared.handle(spotID: spotID, hour: hour)
+            case .plan(let target): DeepLinkRouter.shared.handle(plan: target)
+            }
         }
     }
 }

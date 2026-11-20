@@ -29,3 +29,6 @@ fastlane/test_output
 .env
 .env.*
 !.env.example
+
+# Keep spec/roadmap/notes docs local-only (not on remote)
+docs/*.md

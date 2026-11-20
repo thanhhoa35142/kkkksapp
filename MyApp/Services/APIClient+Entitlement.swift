@@ -11,8 +11,8 @@ extension APIClient {
     /// `POST /v1/entitlement/link` — attach a StoreKit signed transaction (JWS)
     /// after purchase or restore. Returns the resolved plan.
     @discardableResult
-    func linkTransaction(deviceID: UUID, signedTransaction: String) async throws -> String {
-        let request = LinkTransactionRequest(deviceId: deviceID, signedTransaction: signedTransaction)
+    func linkTransaction(signedTransaction: String) async throws -> String {
+        let request = LinkTransactionRequest(signedTransaction: signedTransaction)
         let response: LinkTransactionResponse = try await send(.post, "/v1/entitlement/link", body: request)
         return response.plan
     }

@@ -20,7 +20,7 @@ struct RegularRoot: View {
                     .inspector(isPresented: inspectorBinding(enabled: wide)) {
                         if let id = app.selectedSpotID {
                             NavigationStack {
-                                SpotDetailView(spotID: id, showsHeaderMap: false)
+                                SpotDetailView(spotID: id, context: .inspector)
                                     .toolbar {
                                         ToolbarItem(placement: .cancellationAction) {
                                             Button("Close") { app.selectedSpotID = nil }
@@ -54,17 +54,17 @@ private struct ExploreSidebar: View {
     @State private var showSettings = false
     @State private var showCityPicker = false
     @State private var editingAlert: AlertRule?
+    @State private var planStatus = PlanStatusModel()
+    @State private var calendarWindow: PlanWindow?
     @Query(sort: \FavoriteSpot.sortIndex) private var favorites: [FavoriteSpot]
 
     var body: some View {
         @Bindable var app = app
         NavigationStack {
             List(selection: $app.selectedSpotID) {
-                Section {
-                    BestNowRows(model: bestNow, rowStyle: .select)
-                } header: {
-                    Text("Best Now · \(app.when.label)")
-                }
+                BestNowRows(model: bestNow, rowStyle: .select, showCityPicker: $showCityPicker)
+                // No Saved tab in this layout: plans live here.
+                PlansSection(status: planStatus, calendarWindow: $calendarWindow, rowStyle: .select)
                 if !favorites.isEmpty {
                     WeekPlanSection(favorites: favorites, plan: plan, rowStyle: .select)
                     Section("Saved") {
@@ -75,10 +75,8 @@ private struct ExploreSidebar: View {
                     }
                 }
                 AlertsSection(editing: $editingAlert)
-                Section {
-                    AttributionFooter()
-                }
             }
+            .picnicPlanSupport(status: planStatus, calendarWindow: $calendarWindow)
             .navigationTitle("Explore")
             .refreshable { await reload() }
             .toolbar {
@@ -98,7 +96,7 @@ private struct ExploreSidebar: View {
                 #endif
             }
             .navigationDestination(item: pushBinding) { id in
-                SpotDetailView(spotID: id, showsHeaderMap: false)
+                SpotDetailView(spotID: id, context: .inspector)
             }
             .sheet(isPresented: $showSettings) {
                 NavigationStack {
@@ -113,10 +111,11 @@ private struct ExploreSidebar: View {
             .sheet(item: $editingAlert) { rule in
                 AlertEditorSheet(editing: rule, app: app)
             }
-            .sheet(isPresented: $showCityPicker) {
-                NavigationStack { CityPickerList { showCityPicker = false } }
+            .sheet(isPresented: $showCityPicker, onDismiss: { app.presentDeferredPaywall() }) {
+                NavigationStack { CityPickerList(showsGetaways: true) { showCityPicker = false } }
                     .frame(minWidth: 360, minHeight: 480)
             }
+            .getawaysSheet(sized: true)
         }
         .task(id: ReloadKey(when: app.when, place: app.place, plus: app.isPlus, filters: app.filters)) { await reload() }
         .task(id: favorites.map(\.spotID)) { await saved.load(favorites: favorites, when: app.when) }

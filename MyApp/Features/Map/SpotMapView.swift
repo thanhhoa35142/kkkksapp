@@ -107,6 +107,9 @@ extension SpotMapView {
                     existing.capReason = pin.capReason
                     existing.title = pin.title
                     if let view = map.view(for: existing) as? MKMarkerAnnotationView {
+                        // Time-lapse / When change: cross-fade the number and
+                        // color instead of popping (UI_SPEC §8.1 M1).
+                        Self.fade(view)
                         Self.style(view, for: existing)
                     }
                 } else {
@@ -161,7 +164,10 @@ extension SpotMapView {
             if let cluster = annotation as? MKClusterAnnotation {
                 let view = mapView.dequeueReusableAnnotationView(
                     withIdentifier: Self.clusterReuseID, for: cluster) as? MKMarkerAnnotationView
-                view?.markerTintColor = .brand
+                // Neutral on purpose: only spots carry tier color, so a
+                // number on a green balloon is always a score, never a count.
+                view?.markerTintColor = .systemGray
+                view?.glyphTintColor = .white
                 view?.glyphText = "\(cluster.memberAnnotations.count)"
                 view?.titleVisibility = .hidden
                 view?.subtitleVisibility = .hidden
@@ -179,11 +185,13 @@ extension SpotMapView {
             if let score = spot.score {
                 let tier = ScoreTier(score: score)
                 view.glyphText = "\(score)"
-                view.markerTintColor = tier.platformColor
+                view.markerTintColor = tier.mapTint
+                view.glyphTintColor = tier.mapGlyph
                 view.displayPriority = score >= 60 ? .defaultHigh : .defaultLow
             } else {
                 view.glyphText = "–"
                 view.markerTintColor = .systemGray
+                view.glyphTintColor = .white
                 view.displayPriority = .defaultLow
             }
             view.titleVisibility = .adaptive
@@ -193,6 +201,19 @@ extension SpotMapView {
             view.accessibilityLabel = label
             #else
             view.setAccessibilityLabel(label)
+            #endif
+        }
+
+        /// 0.2 s cross-fade of the pin's next render; skipped under Reduce Motion.
+        static func fade(_ view: MKAnnotationView) {
+            guard !reduceMotion else { return }
+            let transition = CATransition()
+            transition.type = .fade
+            transition.duration = 0.2
+            #if os(iOS)
+            view.layer.add(transition, forKey: "scoreFade")
+            #else
+            view.layer?.add(transition, forKey: "scoreFade")
             #endif
         }
 

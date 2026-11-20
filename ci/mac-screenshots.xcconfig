@@ -1,0 +1,12 @@
+// CI only (Test macOS step): ad-hoc signing without entitlements, so the
+// Mac app runs on a runner with no provisioning profile. Push, associated
+// domains and the App Group need a profile; the screenshots run on fixture
+// data and need none of them. Command-line -xcconfig beats target settings,
+// including the conditional [sdk=macosx*] entitlements.
+CODE_SIGN_IDENTITY = -
+CODE_SIGN_STYLE = Manual
+DEVELOPMENT_TEAM =
+PROVISIONING_PROFILE_SPECIFIER =
+CODE_SIGN_ENTITLEMENTS =
+CODE_SIGN_ENTITLEMENTS[sdk=macosx*] =
+ENABLE_HARDENED_RUNTIME = NO

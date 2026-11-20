@@ -88,7 +88,7 @@ final class LocationProvider {
         }
 
         func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-            Log.geo.error("location failed: \(error.localizedDescription)")
+            Log.geo.error("location failed: \(ErrorSummary.describe(error), privacy: .public)")
             onLocation?(nil)
         }
     }

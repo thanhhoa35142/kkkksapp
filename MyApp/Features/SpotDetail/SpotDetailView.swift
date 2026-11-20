@@ -3,19 +3,45 @@ import SwiftUI
 
 /// S5 · Spot Detail. Pushed from lists, shown in a sheet from the iPhone map
 /// and in the inspector / sidebar on iPad and Mac.
+///
+/// The name and the score each appear once per context (no nav-bar title:
+/// long names need two lines). The map sheet's first ~220 pt is a pinned
+/// summary — name, score, Directions — so the peek detent answers the
+/// question on its own; the rest scrolls under it when expanded.
 struct SpotDetailView: View {
+    enum Context {
+        /// Pushed from a list: static header map + summary.
+        case page
+        /// iPad / Mac inspector or sidebar push: the live map is already beside it.
+        case inspector
+        /// iPhone map sheet (220 pt peek): pinned summary header, no nav bar.
+        case mapSheet
+
+        var showsHeaderMap: Bool { self == .page }
+    }
+
     let spotID: UUID
-    /// Off when the live map is already behind (map sheet, inspector).
-    var showsHeaderMap = true
+    var context: Context = .page
+    /// Hour to show on open (decision card, plan); ignored when the forecast
+    /// has no such hour or the day needs Plus.
+    var focusHour: Date? = nil
 
     @Environment(AppState.self) private var app
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var model = SpotDetailModel()
     @State private var day: Date?
     @State private var showBreakdown = false
     @State private var showReport = false
     @State private var showAlertEditor = false
     @State private var isNearSpot = false
+    /// Spot whose score has drawn in once (M3). Others start from 0.
+    @State private var introSpotID: UUID?
+    @State private var reportSent = false
+    @State private var alertSaves = 0
+    /// Hour opened from a plan / link. Kept apart from the chart's
+    /// `selectedHour` so it doesn't fire the drag haptic.
+    @State private var focusedHour: Date?
 
     private var summary: SpotSummary? { app.summaries[spotID] }
 
@@ -28,9 +54,18 @@ struct SpotDetailView: View {
     }
 
     /// The hour this screen shows: chart selection, else the app's "When".
-    private var activeHour: Date { model.selectedHour ?? app.when.resolved }
+    private var activeHour: Date { model.selectedHour ?? focusedHour ?? app.when.resolved }
 
     private var activePoint: ForecastPoint? { model.point(at: activeHour) }
+
+    private var score: Int? { activePoint?.score ?? summary?.score?.score }
+
+    /// M3: the number and ring count up from 0 once per spot open;
+    /// Reduce Motion shows the value straight away.
+    private var shownScore: Int? {
+        guard let score else { return nil }
+        return reduceMotion || introSpotID == spotID ? score : 0
+    }
 
     private var displayName: String {
         if let d = model.detail {
@@ -39,9 +74,13 @@ struct SpotDetailView: View {
         return summary?.displayName ?? ""
     }
 
+    private var hasAlert: Bool { app.alerts.rule(for: spotID) != nil }
+
     var body: some View {
         List {
-            headerSection
+            if context != .mapSheet {
+                headerSection
+            }
             scoreSection
             if isNearSpot {
                 CrowdReportSection(spotID: spotID)
@@ -51,15 +90,19 @@ struct SpotDetailView: View {
             aboutSection
         }
         .groupedList()
-        .navigationTitle(displayName)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if context == .mapSheet {
+                sheetHeader
+            }
+        }
+        .navigationTitle(Text(verbatim: ""))
         .inlineTitle()
+        .hidesNavigationBar(context == .mapSheet)
         .toolbar {
-            if let spot = currentSummary {
+            if context != .mapSheet, let spot = currentSummary {
                 ToolbarItem(placement: .primaryAction) { SaveButton(spot: spot) }
-                if let url = mapsURL {
-                    ToolbarItem(placement: .primaryAction) {
-                        ShareLink(item: url, subject: Text(displayName))
-                    }
+                if let url = shareURL {
+                    ToolbarItem(placement: .primaryAction) { shareLink(url) }
                 }
             }
         }
@@ -76,12 +119,24 @@ struct SpotDetailView: View {
         }
         .task(id: spotID) {
             model.selectedHour = nil
+            focusedHour = nil
             day = nil
             isNearSpot = false
+            reportSent = false
             await model.load(id: spotID)
+            applyFocus(focusHour)
+            applyPendingFocus()
             app.track("spot_opened", ["kind": .string(model.detail?.kind ?? summary?.kind ?? "")])
             isNearSpot = await CrowdProximity.check(app: app, spot: coordinate,
                                                     kind: model.detail?.kind ?? summary?.kind ?? "")
+        }
+        // Same spot already open (e.g. a second link to it): the task above
+        // doesn't rerun, so pick up the new hour here.
+        .onChange(of: app.detailFocus) { _, _ in applyPendingFocus() }
+        .task(id: IntroKey(spotID: spotID, ready: score != nil)) {
+            // Runs after the first frame (at 0), so the change animates.
+            guard score != nil, introSpotID != spotID else { return }
+            introSpotID = spotID
         }
         .sheet(isPresented: $showBreakdown) {
             if let point = activePoint {
@@ -89,20 +144,27 @@ struct SpotDetailView: View {
             }
         }
         .sheet(isPresented: $showReport) {
-            ReportSheet(spotID: spotID)
+            ReportSheet(spotID: spotID) { reportSent = true }
         }
         .sheet(isPresented: $showAlertEditor) {
             AlertEditorSheet(spotID: spotID, spotName: displayName, timeZone: timeZone,
-                             existing: app.alerts.rule(for: spotID))
+                             existing: app.alerts.rule(for: spotID),
+                             onSaved: { alertSaves += 1 })
         }
     }
 
-    // MARK: Sections
+    private struct IntroKey: Equatable {
+        let spotID: UUID
+        let ready: Bool
+    }
 
+    // MARK: Header
+
+    /// Page / inspector: optional static map, then name and subtitle.
     @ViewBuilder
     private var headerSection: some View {
         Section {
-            if showsHeaderMap && !dynamicTypeSize.isAccessibilitySize, let coordinate = coordinate {
+            if context.showsHeaderMap && !dynamicTypeSize.isAccessibilitySize, let coordinate = coordinate {
                 HeaderMap(coordinate: coordinate, area: model.detail?.area)
                     .frame(height: 160)
                     .listRowInsets(EdgeInsets())
@@ -111,45 +173,67 @@ struct SpotDetailView: View {
                 Text(displayName)
                     .font(.title2.bold())
                     .lineLimit(2)
+                    .accessibilityAddTraits(.isHeader)
                 Text(headerSubtitle)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
             .padding(.vertical, 4)
+            // Right under the name, as in Apple Maps: the main action is on
+            // screen without scrolling past the map and the score card.
+            actionButtons
         }
     }
+
+    /// iPhone map sheet: everything the 220 pt peek needs, pinned above the
+    /// list — name + subtitle (with Save / Share), score + tier, Directions.
+    private var sheetHeader: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(displayName)
+                        .font(.title3.bold())
+                        .lineLimit(1)
+                        .accessibilityAddTraits(.isHeader)
+                    Text(headerSubtitle)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                if let spot = currentSummary {
+                    SaveButton(spot: spot)
+                        .labelStyle(.iconOnly)
+                        .buttonStyle(.bordered)
+                        .buttonBorderShape(.circle)
+                    if let url = shareURL {
+                        shareLink(url)
+                            .labelStyle(.iconOnly)
+                            .buttonStyle(.bordered)
+                            .buttonBorderShape(.circle)
+                    }
+                }
+            }
+            scoreLine(compact: true)
+            actionButtons
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 20)
+        .padding(.bottom, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.groupedBackground)
+    }
+
+    // MARK: Score
 
     @ViewBuilder
     private var scoreSection: some View {
         Section {
-            let score = activePoint?.score ?? summary?.score?.score
-            let cap = activePoint?.capReason ?? summary?.score?.capReason
-            let confidence = activePoint?.confidence ?? summary?.score?.confidence
-            HStack(alignment: .center, spacing: 16) {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        if let score {
-                            Text(score, format: .number)
-                                .font(.system(.largeTitle, design: .rounded).bold())
-                                .monospacedDigit()
-                                .contentTransition(.numericText(value: Double(score)))
-                                .animation(.snappy(duration: 0.25), value: score)
-                            Text(ScoreTier(score: score).label)
-                                .font(.headline)
-                                .foregroundStyle(ScoreTier(score: score).color)
-                        } else {
-                            Text("No forecast yet")
-                                .font(.headline)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    Text(scoreCaption(confidence: confidence))
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                ScoreBadge(score: score, capReason: cap, diameter: 56)
-                    .accessibilityHidden(true)
+            if context != .mapSheet {
+                scoreLine(compact: false)
+            }
+            if let weather = activePoint?.weather, weather.hasValues {
+                HourWeatherRow(weather: weather)
             }
             ForEach(Array(reasons.enumerated()), id: \.offset) { _, reason in
                 Label(ReasonLocalizer.text(for: reason),
@@ -159,12 +243,64 @@ struct SpotDetailView: View {
             if let score, activePoint != nil {
                 Button("Why \(score)?") { showBreakdown = true }
             }
-            actionButtons
         }
     }
 
+    /// "82 Great" once, as a number and a label; the ring beside it carries
+    /// no number (it would repeat the score).
+    private func scoreLine(compact: Bool) -> some View {
+        let confidence = activePoint?.confidence ?? summary?.score?.confidence
+        let cap = activePoint?.capReason ?? summary?.score?.capReason
+        return HStack(alignment: .center, spacing: 16) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    if let shownScore, let score {
+                        Text(shownScore, format: .number)
+                            .font(.system(compact ? .title : .largeTitle, design: .rounded).bold())
+                            .monospacedDigit()
+                            .contentTransition(reduceMotion ? .opacity : .numericText(value: Double(shownScore)))
+                            .animation(.smooth(duration: 0.3), value: shownScore)
+                        Text(ScoreTier(score: score).label)
+                            .font(.headline)
+                            .foregroundStyle(ScoreTier(score: score).color)
+                        if compact {
+                            // Peek: one line, "82 Great · Today 3 PM".
+                            Text(verbatim: "· \(Format.dayHour(activeHour, in: timeZone))")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    } else {
+                        Text("No forecast yet")
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if !compact {
+                    Text(scoreCaption(confidence: confidence))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .accessibilityElement(children: .combine)
+            Spacer(minLength: 0)
+            if !compact {
+                ScoreBadge(score: shownScore, capReason: cap, diameter: 56, showsNumber: false,
+                           animatesChanges: true, motionDuration: 0.3, maxTypeScale: 1.2)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+
+    /// Directions is the one prominent action; Alert is secondary. Reporting
+    /// lives in About ("Is this spot still here?"). Stacked at accessibility
+    /// sizes so labels never get cut.
     private var actionButtons: some View {
-        HStack(spacing: 12) {
+        let stacked = dynamicTypeSize.isAccessibilitySize
+        let layout = stacked
+            ? AnyLayout(VStackLayout(spacing: 10))
+            : AnyLayout(HStackLayout(spacing: 12))
+        return layout {
             if let coordinate {
                 Button {
                     Directions.open(name: displayName, coordinate: coordinate)
@@ -174,27 +310,25 @@ struct SpotDetailView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("spotAction.directions")
             }
             Button {
                 showAlertEditor = true
             } label: {
-                Label(app.alerts.rule(for: spotID) == nil ? "Alert" : "Edit Alert",
-                      systemImage: app.alerts.rule(for: spotID) == nil ? "bell" : "bell.fill")
-                    .frame(maxWidth: .infinity)
+                Label(hasAlert ? "Edit Alert" : "Alert", systemImage: hasAlert ? "bell.fill" : "bell")
+                    // M5: the bell confirms a saved alert where the user lands.
+                    .symbolEffect(.bounce, value: alertSaves)
+                    .frame(maxWidth: stacked ? .infinity : nil)
             }
             .buttonStyle(.bordered)
-            Button {
-                showReport = true
-            } label: {
-                Label("Report", systemImage: "flag")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
+            .accessibilityIdentifier("spotAction.alert")
         }
         .controlSize(.large)
         .labelStyle(.titleAndIcon)
         .padding(.vertical, 4)
     }
+
+    // MARK: Sections
 
     @ViewBuilder
     private var forecastSection: some View {
@@ -217,13 +351,25 @@ struct SpotDetailView: View {
                     selectedHour: $model.selectedHour,
                     activeHour: activeHour)
                     .padding(.vertical, 4)
+
+                if let window = chartPlanWindow {
+                    HStack(spacing: 12) {
+                        PlanItButton(window: window, source: .chart)
+                            .buttonStyle(.bordered)
+                        Text(verbatim: PlanWindowRow.rangeLabel(window))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    .accessibilityElement(children: .contain)
+                }
             } header: {
                 Text("Next 7 days")
             } footer: {
                 if app.isPlus {
-                    Text("Drag across the chart to check another hour.")
+                    Text("Drag across the chart to check another hour. Shaded hours are after dark.")
                 } else {
-                    Text("Best score of each day. Hourly detail after tomorrow comes with Plus.")
+                    Text("Best score of each day. Hourly detail after tomorrow comes with Plus. Shaded hours are after dark.")
                 }
             }
         }
@@ -254,15 +400,21 @@ struct SpotDetailView: View {
                     Text(verified, format: .dateTime.day().month().year())
                 }
             }
-            LabeledContent("Source", value: "OpenStreetMap")
-            Button("Is this spot still here?") { showReport = true }
+            if reportSent {
+                HStack(spacing: 8) {
+                    ConfirmationMark()
+                    Text("Thanks. Your report was sent.")
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
+            } else {
+                Button("Is this spot still here?") { showReport = true }
+                    .accessibilityIdentifier("spotAction.report")
+            }
         } header: {
             Text("About")
         } footer: {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Map data © OpenStreetMap contributors.")
-                WeatherAttribution(source: model.detail?.weatherSource)
-            }
+            WeatherAttribution(source: model.detail?.weatherSource)
         }
     }
 
@@ -313,6 +465,41 @@ struct SpotDetailView: View {
         return SpotLink.mapsURL(name: displayName, latitude: c.latitude, longitude: c.longitude)
     }
 
+    /// The Pickhour share page (`<ShareBaseURL>/s/<id>`, opens the app when
+    /// installed); the Apple Maps link when no share host is configured.
+    private var shareURL: URL? {
+        SpotLink.shareURL(spotID: spotID) ?? mapsURL
+    }
+
+    /// Shares the link with a line of context:
+    /// "Vondelpark · Today 3 PM · score 82".
+    private func shareLink(_ url: URL) -> some View {
+        ShareLink(item: url, subject: Text(displayName), message: Text(shareMessage))
+    }
+
+    private var shareMessage: String {
+        let hour = Format.dayHour(activeHour, in: timeZone)
+        guard let score else { return "\(displayName) · \(hour)" }
+        return String(localized: "\(displayName) · \(hour) · score \(score)")
+    }
+
+    /// "Plan It" under the chart: from the hour on screen, the good run
+    /// (≥ 60, no cap) up to 4 hours; when that hour doesn't start one, the
+    /// 2 hours from it as they are. nil for past hours or without data.
+    private var chartPlanWindow: PlanWindow? {
+        guard let point = activePoint, !displayName.isEmpty else { return nil }
+        let start = point.tsHour
+        guard start.addingTimeInterval(3600) > .now else { return nil }
+        let hours = model.forecast.map { ScoredHour(tsHour: $0.tsHour, score: $0.score, capReason: $0.capReason) }
+        let candidate = DecisionCandidate(spotID: spotID, spotName: displayName, timeZone: timeZone, hours: hours)
+        if let run = DecisionPlanner.startingNow([candidate], from: start) { return run }
+        let end = start.addingTimeInterval(TimeInterval(WeekPlanner.minHours) * 3600)
+        let inWindow = model.forecast.filter { $0.tsHour >= start && $0.tsHour < end }
+        let mean = Double(inWindow.map(\.score).reduce(0, +)) / Double(max(inWindow.count, 1))
+        return PlanWindow(spotID: spotID, spotName: displayName, timeZone: timeZone,
+                          start: start, end: end, score: Int(mean.rounded()))
+    }
+
     /// Free plan: hourly detail for today and tomorrow; days 3+ need Plus (spec §15).
     private func dayNeedsPlus(_ index: Int) -> Bool {
         !app.isPlus && index >= 2
@@ -320,11 +507,36 @@ struct SpotDetailView: View {
 
     private func select(_ entry: WeekStrip.Day) {
         if entry.locked {
+            // The day's best hour is Free data (week strip) — show it on the paywall.
+            app.paywallTeaser = entry.best.map {
+                ForecastTeaser(day: entry.date, hour: $0.tsHour, score: $0.score, timeZone: timeZone)
+            }
             app.paywall = .forecast
         } else if entry.date != day {
             day = entry.date
             model.selectedHour = nil
+            focusedHour = nil
         }
+    }
+
+    private func applyPendingFocus() {
+        guard let focus = app.detailFocus, focus.spotID == spotID, !model.forecast.isEmpty else { return }
+        app.detailFocus = nil
+        applyFocus(focus.hour)
+    }
+
+    /// Shows `hour` (its day in the strip, its mark on the chart) when the
+    /// forecast has it. Free: not on days that need Plus.
+    private func applyFocus(_ hour: Date?) {
+        guard let hour, model.point(at: hour) != nil else { return }
+        var calendar = Calendar.current
+        calendar.timeZone = timeZone
+        let days = model.days(in: timeZone)
+        guard let index = days.firstIndex(where: { calendar.isDate(hour, inSameDayAs: $0) }),
+              !dayNeedsPlus(index) else { return }
+        day = days[index]
+        model.selectedHour = nil
+        focusedHour = hour
     }
 }
 
@@ -363,13 +575,15 @@ private struct HeaderMap: View {
     }
 }
 
-/// Weather attribution required by Apple WeatherKit / Open-Meteo (CC BY 4.0).
+/// The Apple Weather mark + legal link, which WeatherKit's terms require
+/// next to weather it supplies (App Review checks it). Every other credit
+/// (OpenStreetMap, Open-Meteo, NOAA, Copernicus) lives in Settings → Data
+/// Sources, which their licences allow — not on the screens people use.
 struct WeatherAttribution: View {
     let source: String?
 
     private static let appleWeatherLegal = URL(string: "https://weatherkit.apple.com/legal-attribution.html")
         ?? URL(fileURLWithPath: "/")
-    private static let openMeteo = URL(string: "https://open-meteo.com/") ?? URL(fileURLWithPath: "/")
 
     var body: some View {
         switch source {
@@ -377,11 +591,6 @@ struct WeatherAttribution: View {
             HStack(spacing: 4) {
                 Text("Weather:")
                 Link("Apple Weather", destination: Self.appleWeatherLegal)
-            }
-        case "openmeteo":
-            HStack(spacing: 4) {
-                Text("Weather:")
-                Link("Open-Meteo.com", destination: Self.openMeteo)
             }
         default:
             EmptyView()

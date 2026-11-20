@@ -11,17 +11,28 @@ struct MyAppApp: App {
 
     @State private var appState = AppState()
 
+    /// One store for every scene; in-memory with seeded favorites in UI tests.
+    private static let modelContainer: ModelContainer = {
+        if let fixture = UITestFixtures.makeModelContainer() { return fixture }
+        do {
+            return try ModelContainer(for: FavoriteSpot.self, PicnicPlan.self)
+        } catch {
+            fatalError("SwiftData store failed to open: \(error)")
+        }
+    }()
+
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(appState)
+                .preferredColorScheme(UITestFixtures.colorScheme)
                 .task { await appState.bootstrap() }
                 #if os(macOS)
                 // UI_SPEC §10.4: Mac window minimum 960×640.
                 .frame(minWidth: 960, minHeight: 640)
                 #endif
         }
-        .modelContainer(for: FavoriteSpot.self)
+        .modelContainer(Self.modelContainer)
         #if os(macOS)
         .defaultSize(width: 1200, height: 800)
         .windowResizability(.contentMinSize)
@@ -32,9 +43,10 @@ struct MyAppApp: App {
         Settings {
             NavigationStack { SettingsScreen() }
                 .environment(appState)
+                .preferredColorScheme(UITestFixtures.colorScheme)
                 .frame(width: 520, height: 620)
         }
-        .modelContainer(for: FavoriteSpot.self)
+        .modelContainer(Self.modelContainer)
         #endif
     }
 }

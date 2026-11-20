@@ -17,7 +17,13 @@
     <!-- Shared with the PickhourWidget extension (Shared/WidgetBridge.swift). -->
     <key>com.apple.security.application-groups</key>
     <array>
-        <string>group.com.example.MyApp</string>
+        <string>group.app.pickhour</string>
+    </array>
+    <!-- Universal links: https://pickhour.app/s/<spotId> opens the app
+         (host must equal Info.plist ShareBaseURL). -->
+    <key>com.apple.developer.associated-domains</key>
+    <array>
+        <string>applinks:pickhour.app</string>
     </array>
 </dict>
 </plist>

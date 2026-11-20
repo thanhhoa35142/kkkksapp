@@ -35,7 +35,7 @@ struct SpotSummary: Identifiable {
         return parts.joined(separator: " · ")
     }
 
-    /// First two reasons, e.g. "Clear skies, 21° · Quiet right now".
+    /// First two reasons, e.g. "Clear skies, 21° · Usually quiet at this hour".
     var reasonLine: String? {
         guard let reasons = score?.reasons, !reasons.isEmpty else { return nil }
         let known = reasons.filter { ReasonLocalizer.isKnown($0.code) }
@@ -92,8 +92,34 @@ enum SpotLink {
         URL(string: "pickhour://spot/\(spotID.uuidString)")!
     }
 
-    static func spotID(from url: URL) -> UUID? {
-        guard url.scheme == "pickhour", url.host == "spot" else { return nil }
-        return UUID(uuidString: url.lastPathComponent)
+    /// `<ShareBaseURL>/s/<id>` — the Pickhour share page. It is a universal
+    /// link: opens the app when installed, a web page otherwise. nil when no
+    /// share host is configured (callers fall back to the Apple Maps link).
+    static func shareURL(spotID: UUID, base: URL? = AppConfig.shareBaseURL) -> URL? {
+        base?.appendingPathComponent("s").appendingPathComponent(spotID.uuidString.lowercased())
+    }
+
+    /// A timed link — "this spot at this hour" — `…/s/<id>?at=<UTC>`
+    /// (`PlanLink`). Opening it selects that hour when it is still usable.
+    static func shareURL(spotID: UUID, at hour: Date, base: URL? = AppConfig.shareBaseURL) -> URL? {
+        shareURL(spotID: spotID, base: base).map { PlanLink.url($0, at: hour) }
+    }
+
+    /// `pickhour://spot/<id>?at=<UTC>`.
+    static func appURL(spotID: UUID, at hour: Date) -> URL {
+        PlanLink.url(appURL(spotID: spotID), at: hour)
+    }
+
+    /// Accepts `pickhour://spot/<id>` and the share page `https://<host>/s/<id>`.
+    static func spotID(from url: URL, shareBase: URL? = AppConfig.shareBaseURL) -> UUID? {
+        if url.scheme == "pickhour", url.host == "spot" {
+            return UUID(uuidString: url.lastPathComponent)
+        }
+        if let shareHost = shareBase?.host, url.scheme == "https",
+           url.host?.lowercased() == shareHost.lowercased() {
+            let parts = url.pathComponents // ["/", "s", "<id>"]
+            if parts.count == 3, parts[1] == "s" { return UUID(uuidString: parts[2]) }
+        }
+        return nil
     }
 }

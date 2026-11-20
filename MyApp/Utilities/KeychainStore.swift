@@ -1,14 +1,11 @@
 import Foundation
 import Security
 
-/// Minimal Keychain wrapper — Security framework only, no dependency.
-/// Stores small secrets: the stable device ID and the APNs token.
+
 enum KeychainStore {
     private static let service = "app.pickhour.shared"
 
-    /// Base query for every call. On macOS the legacy file keychain behaves
-    /// differently (per-app ACL prompts); the data protection keychain gives
-    /// the same semantics as iOS.
+   
     private static func base(_ key: Key) -> [String: Any] {
         var q: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -23,6 +20,7 @@ enum KeychainStore {
 
     enum Key: String {
         case deviceID = "device.id"
+        case deviceSecret = "device.secret"
         case apnsToken = "apns.token"
         case apnsEnv = "apns.env"
     }
@@ -61,5 +59,16 @@ enum DeviceIdentity {
         let id = UUID()
         KeychainStore.set(id.uuidString, for: .deviceID)
         return id
+    }
+
+    /// Per-device credential issued by `POST /v1/devices` on first
+    /// registration. Sent as `X-Device-Token` on every device-scoped call;
+    /// nil until the first successful registration returns it.
+    static var deviceSecret: String? {
+        get { KeychainStore.string(for: .deviceSecret) }
+        set {
+            if let newValue { KeychainStore.set(newValue, for: .deviceSecret) }
+            else { KeychainStore.delete(.deviceSecret) }
+        }
     }
 }
