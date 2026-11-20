@@ -15,6 +15,9 @@ import AppKit
 final class PushManager {
     static let shared = PushManager()
 
+    /// "deviceID|env|token" last accepted by `POST /v1/devices`.
+    private static let registeredTokenKey = "push.registeredToken"
+
     private init() {}
 
     /// Returns whether the user granted alert permission.
@@ -60,20 +63,28 @@ final class PushManager {
 
     /// Called by AppDelegate with the raw APNs token. Persists it and syncs
     /// the device record so alerts can reach this install.
+    ///
+    /// iOS hands the token back on every launch (`registerIfAuthorized`),
+    /// usually unchanged. Re-registering each time doubled the launch's
+    /// `POST /v1/devices`, which the server limits per IP (30/hour) — so a
+    /// carrier NAT or shared Wi-Fi ran out for everyone behind it. Skipped
+    /// when this device id already registered this token and environment;
+    /// `AppState.registerDevice()` sends the stored token on launch anyway.
     func handleDeviceToken(_ tokenData: Data) async {
         let token = tokenData.map { String(format: "%02x", $0) }.joined()
         KeychainStore.set(token, for: .apnsToken)
+        // Xcode debug builds hit the sandbox APNs environment.
+        #if DEBUG
+        let env = "sandbox"
+        #else
+        let env = "production"
+        #endif
+        KeychainStore.set(env, for: .apnsEnv)
+
+        let registration = "\(DeviceIdentity.deviceID.uuidString)|\(env)|\(token)"
+        if UserDefaults.standard.string(forKey: Self.registeredTokenKey) == registration { return }
 
         do {
-            let env = await MainActor.run {
-                // Xcode debug builds hit the sandbox APNs environment.
-                #if DEBUG
-                return "sandbox"
-                #else
-                return "production"
-                #endif
-            }
-            KeychainStore.set(env, for: .apnsEnv)
 
             _ = try await AppConfig.apiClient.registerDevice(DeviceRegisterRequest(
                 id: DeviceIdentity.deviceID,
@@ -83,6 +94,7 @@ final class PushManager {
                 tz: TimeZone.current.identifier,
                 appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
             ))
+            UserDefaults.standard.set(registration, forKey: Self.registeredTokenKey)
             Log.api.info("device registered for push, token \(token.prefix(8))…")
         } catch {
             Log.api.error("device registration failed: \(ErrorSummary.describe(error), privacy: .public)")

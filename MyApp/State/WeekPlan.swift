@@ -29,7 +29,7 @@ final class WeekPlanModel {
         await withTaskGroup(of: [PlanWindow]?.self) { group in
             for spot in inputs {
                 group.addTask {
-                    guard let points = try? await AppConfig.apiClient.forecast(spotID: spot.id) else { return nil }
+                    guard let points = try? await ForecastCache.shared.forecast(spotID: spot.id) else { return nil }
                     return WeekPlanner.bestPerDay(points, spotID: spot.id, spotName: spot.name, timeZone: spot.tz)
                 }
             }

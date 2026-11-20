@@ -15,7 +15,7 @@ final class SpotDetailModel {
     func load(id: UUID) async {
         if detail == nil { phase = .loading }
         async let detailCall = AppConfig.apiClient.spot(id: id)
-        async let forecastCall = AppConfig.apiClient.forecast(spotID: id)
+        async let forecastCall = ForecastCache.shared.forecast(spotID: id)
         do {
             detail = try await detailCall
             phase = .loaded
