@@ -12,16 +12,20 @@ final class MacScreenshotTests: XCTestCase {
         continueAfterFailure = true
     }
 
-    private func launch(plan: String = "free", localHour: Int = 10, language: String = "en",
+    /// Language of the app under test; labels the tests tap are looked up in it.
+    private var language = ScreenshotLanguage.current
+
+    private func launch(plan: String = "free", localHour: Int = 10,
+                        language: String = ScreenshotLanguage.current,
                         dark: Bool = false, extra: [String] = []) -> XCUIApplication {
+        self.language = language
         let app = XCUIApplication()
-        let locales = ["en": "en_US", "nl": "nl_NL", "de": "de_DE", "es": "es_ES"]
         app.launchArguments = [
             "-UITestFixtures",
             "-UITestPlan", plan,
             "-UITestLocalHour", String(localHour),
             "-onboardingDone", "YES",
-            "-AppleLanguages", "(\(language))", "-AppleLocale", locales[language] ?? "en_US",
+            "-AppleLanguages", "(\(language))", "-AppleLocale", ScreenshotLanguage.locale(language),
             // Fixture mode applies it as the preferred color scheme; the
             // runner itself stays in light mode.
             "-UITestAppearance", dark ? "dark" : "light",
@@ -125,7 +129,7 @@ final class MacScreenshotTests: XCTestCase {
     func test04Night() {
         let app = launch(localHour: 2)
         waitForResults(app, "night")
-        let next = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "Next good time")).firstMatch
+        let next = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", ScreenshotLanguage.text("Next good time", in: language))).firstMatch
         if !next.waitForExistence(timeout: 5) {
             XCTFail("[night] no Next good time card at 2 AM")
         }
@@ -241,7 +245,7 @@ final class MacScreenshotTests: XCTestCase {
     func test12Paywall() {
         let app = launch()
         waitForResults(app, "paywall")
-        let more = app.buttons.matching(NSPredicate(format: "label == %@", "See more picks with Plus")).firstMatch
+        let more = app.buttons.matching(NSPredicate(format: "label == %@", ScreenshotLanguage.text("See more picks with Plus", in: language))).firstMatch
         guard more.waitForExistence(timeout: 5) else {
             XCTFail("[paywall] no See more picks with Plus button")
             capture(app, "13-paywall")
@@ -255,7 +259,7 @@ final class MacScreenshotTests: XCTestCase {
             XCTFail("[paywall] the button did not open the paywall sheet")
         }
         let price = app.descendants(matching: .any)
-            .matching(NSPredicate(format: "label CONTAINS %@", "$29.99")).firstMatch
+            .matching(NSPredicate(format: "label CONTAINS %@", "29")).firstMatch
         if !price.waitForExistence(timeout: 5) {
             XCTFail("[paywall] no fixture price on the paywall")
         }

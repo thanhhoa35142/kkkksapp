@@ -14,17 +14,21 @@ final class PhoneScreenshotTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func launch(plan: String = "free", localHour: Int = 10, language: String = "en",
+    /// Language of the app under test; labels the tests tap are looked up in it.
+    private var language = ScreenshotLanguage.current
+
+    private func launch(plan: String = "free", localHour: Int = 10,
+                        language: String = ScreenshotLanguage.current,
                         dark: Bool = false, onboardingDone: Bool = true,
                         extra: [String] = []) -> XCUIApplication {
+        self.language = language
         let app = XCUIApplication()
-        let locales = ["en": "en_US", "nl": "nl_NL", "de": "de_DE", "es": "es_ES"]
         app.launchArguments = [
             "-UITestFixtures",
             "-UITestPlan", plan,
             "-UITestLocalHour", String(localHour),
             "-onboardingDone", onboardingDone ? "YES" : "NO",
-            "-AppleLanguages", "(\(language))", "-AppleLocale", locales[language] ?? "en_US",
+            "-AppleLanguages", "(\(language))", "-AppleLocale", ScreenshotLanguage.locale(language),
             "-UITestAppearance", dark ? "dark" : "light",
         ] + extra
         app.launch()
@@ -68,8 +72,11 @@ final class PhoneScreenshotTests: XCTestCase {
         return true
     }
 
+    /// The app's text for an English label, in the language under test.
+    private func t(_ english: String) -> String { ScreenshotLanguage.text(english, in: language) }
+
     private func button(_ app: XCUIApplication, _ label: String) -> XCUIElement {
-        app.buttons.matching(NSPredicate(format: "label == %@", label)).firstMatch
+        app.buttons.matching(NSPredicate(format: "label == %@", t(label))).firstMatch
     }
 
     private func button(_ app: XCUIApplication, beginningWith prefix: String) -> XCUIElement {
@@ -82,7 +89,8 @@ final class PhoneScreenshotTests: XCTestCase {
 
     /// iPhone Duo folded draws the tabs as a side rail outside `tabBars`,
     /// so fall back to any button, then any element, with the tab's label.
-    private func openTab(_ app: XCUIApplication, _ label: String) {
+    private func openTab(_ app: XCUIApplication, _ english: String) {
+        let label = t(english)
         let barButton = app.tabBars.buttons[label]
         if barButton.waitForExistence(timeout: 3) {
             tap(barButton, "\(label) tab", in: app)
@@ -307,7 +315,7 @@ final class PhoneScreenshotTests: XCTestCase {
     private func marketingWeek(dark: Bool, name: String) {
         let app = launch(dark: dark)
         openSpotDetail(app)
-        let header = app.staticTexts["Next 7 days"]
+        let header = app.staticTexts[t("Next 7 days")]
         if !header.waitForExistence(timeout: 5) || !header.isHittable {
             Layout.scrollTo(header, in: app)
         }
@@ -320,9 +328,10 @@ final class PhoneScreenshotTests: XCTestCase {
     private func marketingWhy(dark: Bool, name: String) {
         let app = launch(dark: dark)
         openSpotDetail(app)
-        guard tap(button(app, beginningWith: "Why"), "Why NN?", in: app) else { return }
+        let why = ScreenshotLanguage.whyPrefix(in: language)
+        guard tap(button(app, beginningWith: why), "Why NN?", in: app) else { return }
         let sheetTitle = app.navigationBars.staticTexts.matching(
-            NSPredicate(format: "label BEGINSWITH 'Why'")).firstMatch
+            NSPredicate(format: "label BEGINSWITH %@", why)).firstMatch
         if sheetTitle.waitForExistence(timeout: 3) {
             let start = sheetTitle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
             let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.05))

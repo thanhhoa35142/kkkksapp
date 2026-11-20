@@ -15,6 +15,11 @@ final class PadScreenshotTests: XCTestCase {
 
     // MARK: - Helpers
 
+    /// Language of the run (`SCREENSHOT_LANG`); labels the tests tap are looked up in it.
+    private let language = ScreenshotLanguage.current
+
+    private func t(_ english: String) -> String { ScreenshotLanguage.text(english, in: language) }
+
     private func launch(plan: String = "free", dark: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = [
@@ -22,7 +27,7 @@ final class PadScreenshotTests: XCTestCase {
             "-UITestPlan", plan,
             "-UITestLocalHour", "10",
             "-onboardingDone", "YES",
-            "-AppleLanguages", "(en)", "-AppleLocale", "en_US",
+            "-AppleLanguages", "(\(language))", "-AppleLocale", ScreenshotLanguage.locale(language),
             "-UITestAppearance", dark ? "dark" : "light",
         ]
         app.launch()
@@ -56,7 +61,7 @@ final class PadScreenshotTests: XCTestCase {
     }
 
     private func button(_ app: XCUIApplication, _ label: String) -> XCUIElement {
-        app.buttons.matching(NSPredicate(format: "label == %@", label)).firstMatch
+        app.buttons.matching(NSPredicate(format: "label == %@", t(label))).firstMatch
     }
 
     /// Scrolls the sidebar (not the map) until `element` can be tapped.
@@ -160,7 +165,7 @@ final class PadScreenshotTests: XCTestCase {
             more.tap()
             // The price sits inside the row's button, so match any element.
             let price = app.descendants(matching: .any)
-                .matching(NSPredicate(format: "label CONTAINS %@", "$29.99")).firstMatch
+                .matching(NSPredicate(format: "label CONTAINS %@", "29")).firstMatch
             if !price.waitForExistence(timeout: 5) {
                 XCTFail("[paywall] no fixture price on the paywall")
             }
@@ -175,9 +180,9 @@ final class PadScreenshotTests: XCTestCase {
         waitForResults(app, "settings")
         // A `.secondaryAction` toolbar item: on iPad it sits in the "•••"
         // overflow menu, not on the bar itself.
-        let settings = app.buttons["Settings"].firstMatch
+        let settings = app.buttons[t("Settings")].firstMatch
         if !settings.waitForExistence(timeout: 2) {
-            let more = app.navigationBars.buttons["More"].firstMatch
+            let more = app.navigationBars.buttons[t("More")].firstMatch
             if more.waitForExistence(timeout: 3) { more.tap() }
         }
         if settings.waitForExistence(timeout: 5) {

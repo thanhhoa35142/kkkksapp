@@ -12,6 +12,8 @@ name: appstore-screenshots
 #                Needs Xcode 27.1+ (the first SDK with the Duo simulator).
 # Runs on demand and on pushes to feat/appstore-screenshots*, so the sets can
 # be refreshed without merging to main (ci.yml only runs for main).
+# The iPhone 6.3, iPad and Mac sets run once per App Store language
+# (en, nl, de, es); artifacts carry the language in their name.
 
 on:
   workflow_dispatch:
@@ -24,8 +26,16 @@ concurrency:
 
 jobs:
   iphone-63:
-    name: iphone 6.3"
+    name: iphone 6.3" (${{ matrix.lang }})
     runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        lang: [en, nl, de, es]
+    env:
+      # Read by the screenshot suites as SCREENSHOT_LANG (xcodebuild passes
+      # TEST_RUNNER_* to the test runner without the prefix).
+      TEST_RUNNER_SCREENSHOT_LANG: ${{ matrix.lang }}
     steps:
       - uses: actions/checkout@v4
 
@@ -77,7 +87,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: iphone-6.3-screenshots
+          name: iphone-6.3-screenshots-${{ matrix.lang }}
           path: build/iphone-6.3/*.png
           if-no-files-found: warn
           retention-days: 14
@@ -85,8 +95,16 @@ jobs:
   # Same as ci.yml's iPad step (13-inch, landscape 2752 × 2064), here so the
   # set can be refreshed without a PR to main.
   ipad-13:
-    name: ipad 13"
+    name: ipad 13" (${{ matrix.lang }})
     runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        lang: [en, nl, de, es]
+    env:
+      # Read by the screenshot suites as SCREENSHOT_LANG (xcodebuild passes
+      # TEST_RUNNER_* to the test runner without the prefix).
+      TEST_RUNNER_SCREENSHOT_LANG: ${{ matrix.lang }}
     steps:
       - uses: actions/checkout@v4
 
@@ -127,20 +145,31 @@ jobs:
             w=$(sips -g pixelWidth "$f" | awk '/pixelWidth/ {print $2}')
             if [ "$h" -gt "$w" ]; then sips -r 270 "$f" >/dev/null; fi
           done
+          # The rotated pixels still carry the simulator's Orientation tag.
+          python3 scripts/strip-png-metadata.py build/ipad-13/*.png
           python3 scripts/check-screenshot-sizes.py build/ipad-13 2752x2064
 
       - name: Upload screenshots
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: ipad-13-screenshots
+          name: ipad-13-screenshots-${{ matrix.lang }}
           path: build/ipad-13/*.png
           if-no-files-found: warn
           retention-days: 14
 
   # Native Mac app window shots, padded to 1280 × 800 (moved from ci.yml).
   mac:
+    name: mac (${{ matrix.lang }})
     runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        lang: [en, nl, de, es]
+    env:
+      # Read by the screenshot suites as SCREENSHOT_LANG (xcodebuild passes
+      # TEST_RUNNER_* to the test runner without the prefix).
+      TEST_RUNNER_SCREENSHOT_LANG: ${{ matrix.lang }}
     steps:
       - uses: actions/checkout@v4
 
@@ -191,7 +220,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: macos-screenshots
+          name: macos-screenshots-${{ matrix.lang }}
           path: build/mac-screenshots/*.png
           if-no-files-found: warn
           retention-days: 14
@@ -200,7 +229,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: macos-appstore-screenshots
+          name: macos-appstore-screenshots-${{ matrix.lang }}
           path: build/mac-appstore/*.png
           if-no-files-found: warn
           retention-days: 14
