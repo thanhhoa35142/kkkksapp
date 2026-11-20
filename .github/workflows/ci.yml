@@ -221,6 +221,8 @@ jobs:
               --out "build/mac-appstore/$(basename "$f")" >/dev/null \
               || cp "$f" build/mac-appstore/
           done
+          # App Store Connect refuses screenshots with an alpha channel.
+          python3 scripts/strip-alpha.py build/mac-appstore/*.png
           python3 scripts/check-screenshot-sizes.py build/mac-appstore 1280x800
 
       - name: Upload screenshots

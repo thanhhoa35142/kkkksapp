@@ -1,0 +1,257 @@
+name: appstore-screenshots
+
+# App Store screenshot sets, refreshable without a PR to main:
+#   iphone-6.3   the required iPhone class (Dynamic Island, medium display):
+#                1206 × 2622 from an iPhone Pro simulator.
+#   ipad-13      iPad 13-inch, landscape 2752 × 2064 (also made by ci.yml).
+#   iphone-duo   iPhone Duo (foldable): outer 1398 × 2034, inner 2007 × 2853.
+#                Needs Xcode 27.1+ (the first SDK with the Duo simulator).
+# Runs on demand and on pushes to feat/appstore-screenshots*, so the sets can
+# be refreshed without merging to main (ci.yml only runs for main).
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['feat/appstore-screenshots*']
+
+concurrency:
+  group: appstore-screenshots-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  iphone-63:
+    name: iphone 6.3"
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+          xcodebuild -version
+
+      # "iPhone 17 Pro" style name: Pro but not Pro Max (that is 6.9").
+      - name: Screenshots
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devs = json.load(sys.stdin)["devices"]
+          def v(r): return tuple(int(p) for p in r.rsplit("iOS-", 1)[-1].split("-") if p.isdigit())
+          for r in sorted((r for r in devs if "iOS" in r), key=v, reverse=True):
+              for d in devs[r]:
+                  n = d["name"]
+                  if n.startswith("iPhone") and n.endswith(" Pro"):
+                      print(d["udid"]); sys.exit(0)
+          sys.exit("no iPhone ... Pro simulator")')
+          echo "Simulator: $UDID"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl status_bar "$UDID" override --time 9:41 \
+            --dataNetwork wifi --wifiMode active --wifiBars 3 \
+            --cellularMode active --cellularBars 4 \
+            --batteryState charged --batteryLevel 100
+          xcodebuild \
+            -project MyApp.xcodeproj -scheme MyApp \
+            -destination "id=$UDID" -configuration Debug \
+            -resultBundlePath build/phone63.xcresult \
+            -only-testing:MyAppUITests/PhoneScreenshotTests \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            test
+
+      - name: Export screenshots
+        if: ${{ !cancelled() && hashFiles('build/phone63.xcresult/Info.plist') != '' }}
+        run: |
+          mkdir -p build/all63 build/iphone-6.3
+          xcrun xcresulttool export attachments \
+            --path build/phone63.xcresult --output-path build/all63
+          python3 scripts/rename-screenshots.py build/all63 \
+            || echo "rename failed: keeping the exported file names"
+          cp build/all63/[0-9][0-9]-*.png build/iphone-6.3/ || true
+          python3 scripts/check-screenshot-sizes.py build/iphone-6.3 1206x2622 1179x2556
+
+      - name: Upload screenshots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: iphone-6.3-screenshots
+          path: build/iphone-6.3/*.png
+          if-no-files-found: warn
+          retention-days: 14
+
+  # Same as ci.yml's iPad step (13-inch, landscape 2752 × 2064), here so the
+  # set can be refreshed without a PR to main.
+  ipad-13:
+    name: ipad 13"
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+          xcodebuild -version
+
+      - name: Screenshots
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 scripts/pick-simulator.py iPad "Pro 13-inch")
+          echo "Simulator: $UDID"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl status_bar "$UDID" override --time 9:41 \
+            --dataNetwork wifi --wifiMode active --wifiBars 3 \
+            --batteryState charged --batteryLevel 100
+          xcodebuild \
+            -project MyApp.xcodeproj -scheme MyApp \
+            -destination "id=$UDID" -configuration Debug \
+            -resultBundlePath build/ipad.xcresult \
+            -only-testing:MyAppUITests/PadScreenshotTests \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            test
+
+      - name: Export screenshots
+        if: ${{ !cancelled() && hashFiles('build/ipad.xcresult/Info.plist') != '' }}
+        run: |
+          mkdir -p build/ipad-all build/ipad-13
+          xcrun xcresulttool export attachments \
+            --path build/ipad.xcresult --output-path build/ipad-all
+          python3 scripts/rename-screenshots.py build/ipad-all \
+            || echo "rename failed: keeping the exported file names"
+          cp build/ipad-all/[0-9][0-9]-*.png build/ipad-13/ || true
+          # Landscape screens come back in the portrait buffer: turn them back.
+          for f in build/ipad-13/*.png; do
+            h=$(sips -g pixelHeight "$f" | awk '/pixelHeight/ {print $2}')
+            w=$(sips -g pixelWidth "$f" | awk '/pixelWidth/ {print $2}')
+            if [ "$h" -gt "$w" ]; then sips -r 270 "$f" >/dev/null; fi
+          done
+          python3 scripts/check-screenshot-sizes.py build/ipad-13 2752x2064
+
+      - name: Upload screenshots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ipad-13-screenshots
+          path: build/ipad-13/*.png
+          if-no-files-found: warn
+          retention-days: 14
+
+  # First pass: Apple does not document the simulator name or a command-line
+  # fold/unfold control, so this job prints what the image offers (Xcode
+  # versions, device types, simctl fold/posture commands), then captures the
+  # iPhone and iPad flows in whatever posture the simulator boots in. The
+  # size check reports but does not fail until the real sizes are known.
+  iphone-duo:
+    name: iphone duo
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 27.1+
+        run: |
+          echo "Installed:"; ls -d /Applications/Xcode*.app
+          XCODE=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+          VER=$(xcodebuild -version | awk '/^Xcode/ {print $2}')
+          python3 -c 'import sys; v=tuple(int(p) for p in sys.argv[1].split(".")); sys.exit(0 if v >= (27, 1) else f"Xcode {sys.argv[1]} on this runner; iPhone Duo needs 27.1+")' "$VER"
+
+      - name: Probe Duo simulator
+        id: probe
+        run: |
+          {
+            echo "### iPhone Duo probe"
+            echo '```'
+            xcodebuild -version
+            echo "--- device types"
+            xcrun simctl list devicetypes | grep -i -E "duo|fold" || echo "(none matching duo/fold)"
+            echo "--- runtimes"
+            xcrun simctl list runtimes
+            echo "--- simctl commands mentioning fold/pose/posture/display"
+            xcrun simctl help 2>&1 | grep -i -E "fold|pose|posture|display|hinge" || echo "(none)"
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          # A Duo device, created from its device type if the image has none.
+          UDID=$(xcrun simctl list devices available -j | python3 scripts/pick-simulator.py iPhone Duo || true)
+          if [ -z "$UDID" ]; then
+            TYPE=$(xcrun simctl list devicetypes -j | python3 -c '
+          import json, sys
+          for t in json.load(sys.stdin)["devicetypes"]:
+              if "duo" in t["name"].lower():
+                  print(t["identifier"]); break')
+            RUNTIME=$(xcrun simctl list runtimes -j | python3 -c '
+          import json, sys
+          rs = [r for r in json.load(sys.stdin)["runtimes"] if r["platform"] == "iOS" and r["isAvailable"]]
+          print(sorted(rs, key=lambda r: [int(p) for p in r["version"].split(".")])[-1]["identifier"])')
+            [ -n "$TYPE" ] || { echo "No iPhone Duo device type on this image"; exit 1; }
+            UDID=$(xcrun simctl create "iPhone Duo" "$TYPE" "$RUNTIME")
+          fi
+          echo "Simulator: $UDID"
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl status_bar "$UDID" override --time 9:41 \
+            --dataNetwork wifi --wifiMode active --wifiBars 3 \
+            --cellularMode active --cellularBars 4 \
+            --batteryState charged --batteryLevel 100
+          xcrun simctl io "$UDID" screenshot build-probe.png && \
+            python3 -c 'import struct,sys; print("Boot screen:", struct.unpack(">II", open(sys.argv[1],"rb").read(24)[16:24]))' build-probe.png \
+            | tee -a "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Build
+        run: |
+          xcodebuild \
+            -project MyApp.xcodeproj -scheme MyApp \
+            -destination "id=${{ steps.probe.outputs.udid }}" -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            build-for-testing
+
+      # Both flows: the iPhone one (tab bar) fits a compact window, the iPad
+      # one (split view) a regular one. Which root each display shows is
+      # what this run finds out, so a failing flow does not stop the other.
+      - name: iPhone flow
+        continue-on-error: true
+        run: |
+          xcodebuild \
+            -project MyApp.xcodeproj -scheme MyApp \
+            -destination "id=${{ steps.probe.outputs.udid }}" -configuration Debug \
+            -resultBundlePath build/duo-phone.xcresult \
+            -only-testing:MyAppUITests/PhoneScreenshotTests \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            test-without-building
+
+      - name: iPad flow
+        continue-on-error: true
+        run: |
+          xcodebuild \
+            -project MyApp.xcodeproj -scheme MyApp \
+            -destination "id=${{ steps.probe.outputs.udid }}" -configuration Debug \
+            -resultBundlePath build/duo-pad.xcresult \
+            -only-testing:MyAppUITests/PadScreenshotTests \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            test-without-building
+
+      - name: Export screenshots
+        if: ${{ !cancelled() }}
+        run: |
+          for flow in phone pad; do
+            [ -f "build/duo-$flow.xcresult/Info.plist" ] || continue
+            mkdir -p "build/duo-$flow-all" "build/iphone-duo/$flow"
+            xcrun xcresulttool export attachments \
+              --path "build/duo-$flow.xcresult" --output-path "build/duo-$flow-all"
+            python3 scripts/rename-screenshots.py "build/duo-$flow-all" \
+              || echo "rename failed: keeping the exported file names"
+            cp "build/duo-$flow-all"/[0-9][0-9]-*.png "build/iphone-duo/$flow/" || true
+            python3 scripts/check-screenshot-sizes.py "build/iphone-duo/$flow" \
+              1398x2034 2034x1398 2007x2853 2853x2007 \
+              || echo "::warning::iphone-duo/$flow: sizes above are not App Store Duo sizes yet"
+          done
+
+      - name: Upload screenshots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: iphone-duo-screenshots
+          path: |
+            build/iphone-duo/**/*.png
+            build-probe.png
+          if-no-files-found: warn
+          retention-days: 14

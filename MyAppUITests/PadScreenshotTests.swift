@@ -63,7 +63,7 @@ final class PadScreenshotTests: XCTestCase {
     private func scrollSidebar(to element: XCUIElement, in app: XCUIApplication) {
         let list = app.collectionViews.firstMatch
         var tries = 0
-        while list.exists && !(element.exists && element.isHittable) && tries < 8 {
+        while list.exists && !(element.exists && element.isHittable) && tries < 12 {
             list.swipeUp(velocity: .slow)
             tries += 1
         }
@@ -91,10 +91,12 @@ final class PadScreenshotTests: XCTestCase {
         let top = waitForResults(app, "detail")
         if top.exists {
             top.tap()
-            if !id(app, "weather.strip").waitForExistence(timeout: 10) {
+            // The inspector's own controls: `weather.strip` is also in the
+            // sidebar, so waiting on it captured before the inspector loaded.
+            if !id(app, "spotAction.directions").waitForExistence(timeout: 10) {
                 XCTFail("[detail] spot detail did not open in the inspector")
             }
-            settle(2)
+            settle(2.5)
         }
         capture(name)
         app.terminate()
@@ -110,11 +112,13 @@ final class PadScreenshotTests: XCTestCase {
     func test05WeekPlan() {
         let app = launch(plan: "plus")
         waitForResults(app, "week plan")
+        // The sidebar list is lazy: This Week's rows below the fold don't
+        // exist until scrolled to, so scroll first and check after.
         let row = id(app, "planRow")
+        scrollSidebar(to: row, in: app)
         if !row.waitForExistence(timeout: 10) {
             XCTFail("[week plan] no week plan rows for the saved spots")
         }
-        scrollSidebar(to: row, in: app)
         settle(1)
         capture("05-week-plan")
         app.terminate()
@@ -169,7 +173,13 @@ final class PadScreenshotTests: XCTestCase {
     func test08Settings() {
         let app = launch()
         waitForResults(app, "settings")
+        // A `.secondaryAction` toolbar item: on iPad it sits in the "•••"
+        // overflow menu, not on the bar itself.
         let settings = app.buttons["Settings"].firstMatch
+        if !settings.waitForExistence(timeout: 2) {
+            let more = app.navigationBars.buttons["More"].firstMatch
+            if more.waitForExistence(timeout: 3) { more.tap() }
+        }
         if settings.waitForExistence(timeout: 5) {
             settings.tap()
             settle(1.5)

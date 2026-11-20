@@ -1,0 +1,125 @@
+# Codemagic: App Store screenshots for iPhone Duo (foldable).
+# GitHub's macOS runners don't have Xcode 27.1 yet (the first SDK with the
+# Duo simulator), Codemagic does. The other screenshot sets stay on GitHub
+# (.github/workflows/ci.yml, appstore-screenshots.yml).
+#
+# Runs on fixture data (-UITestFixtures): no backend, no secrets, no code
+# signing. Started by hand from the Codemagic UI, so it only spends the
+# 500 free M2 minutes a month when asked.
+#
+# First pass: Apple documents no command-line fold/unfold control, so the
+# probe step prints what the image offers (device types, simctl commands
+# mentioning fold/posture) and the size of the screen the simulator boots
+# with. Both flows (iPhone tab bar, iPad split view) are captured; which
+# one fits each display is what this run finds out.
+#   outer display 1398 × 2034, inner display 2007 × 2853 (or landscape)
+
+workflows:
+  iphone-duo-screenshots:
+    name: iPhone Duo screenshots
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      xcode: 27.1
+    scripts:
+      - name: Xcode
+        script: |
+          xcodebuild -version
+          VER=$(xcodebuild -version | awk '/^Xcode/ {print $2}')
+          python3 -c 'import sys; v=tuple(int(p) for p in sys.argv[1].split(".")); sys.exit(0 if v >= (27, 1) else f"Xcode {sys.argv[1]}; iPhone Duo needs 27.1+")' "$VER"
+
+      - name: Probe Duo simulator
+        script: |
+          mkdir -p build/iphone-duo
+          {
+            xcodebuild -version
+            echo "--- device types"
+            xcrun simctl list devicetypes | grep -i -E "duo|fold" || echo "(none matching duo/fold)"
+            echo "--- runtimes"
+            xcrun simctl list runtimes
+            echo "--- devices"
+            xcrun simctl list devices available | grep -i -E "duo|fold" || echo "(none)"
+            echo "--- simctl commands mentioning fold/pose/posture/display"
+            xcrun simctl help 2>&1 | grep -i -E "fold|pose|posture|display|hinge" || echo "(none)"
+          } | tee build/iphone-duo/probe.txt
+          UDID=$(xcrun simctl list devices available -j | python3 scripts/pick-simulator.py iPhone Duo || true)
+          if [ -z "$UDID" ]; then
+            TYPE=$(xcrun simctl list devicetypes -j | python3 -c '
+          import json, sys
+          for t in json.load(sys.stdin)["devicetypes"]:
+              if "duo" in t["name"].lower():
+                  print(t["identifier"]); break')
+            RUNTIME=$(xcrun simctl list runtimes -j | python3 -c '
+          import json, sys
+          rs = [r for r in json.load(sys.stdin)["runtimes"] if r["platform"] == "iOS" and r["isAvailable"]]
+          print(sorted(rs, key=lambda r: [int(p) for p in r["version"].split(".")])[-1]["identifier"])')
+            [ -n "$TYPE" ] || { echo "No iPhone Duo device type on this image"; exit 1; }
+            UDID=$(xcrun simctl create "iPhone Duo" "$TYPE" "$RUNTIME")
+          fi
+          echo "Simulator: $UDID" | tee -a build/iphone-duo/probe.txt
+          echo "DUO_UDID=$UDID" >> "$CM_ENV"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          # 9:41, full signal and battery, as in Apple's own marketing.
+          xcrun simctl status_bar "$UDID" override --time 9:41 \
+            --dataNetwork wifi --wifiMode active --wifiBars 3 \
+            --cellularMode active --cellularBars 4 \
+            --batteryState charged --batteryLevel 100
+          xcrun simctl io "$UDID" screenshot build/iphone-duo/boot-screen.png || true
+          python3 -c 'import struct,sys; print("Boot screen:", struct.unpack(">II", open(sys.argv[1],"rb").read(24)[16:24]))' \
+            build/iphone-duo/boot-screen.png | tee -a build/iphone-duo/probe.txt || true
+
+      - name: Build for testing
+        script: |
+          xcodebuild \
+            -project MyApp.xcodeproj -scheme MyApp \
+            -destination "id=$DUO_UDID" -configuration Debug \
+            -derivedDataPath build/dd \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            build-for-testing
+
+      - name: iPhone flow
+        ignore_failure: true
+        script: |
+          xcodebuild \
+            -project MyApp.xcodeproj -scheme MyApp \
+            -destination "id=$DUO_UDID" -configuration Debug \
+            -derivedDataPath build/dd \
+            -resultBundlePath build/duo-phone.xcresult \
+            -only-testing:MyAppUITests/PhoneScreenshotTests \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            test-without-building
+
+      - name: iPad flow
+        ignore_failure: true
+        script: |
+          xcodebuild \
+            -project MyApp.xcodeproj -scheme MyApp \
+            -destination "id=$DUO_UDID" -configuration Debug \
+            -derivedDataPath build/dd \
+            -resultBundlePath build/duo-pad.xcresult \
+            -only-testing:MyAppUITests/PadScreenshotTests \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            test-without-building
+
+      # Reports sizes; does not fail until the real ones are known.
+      - name: Export screenshots
+        script: |
+          for flow in phone pad; do
+            [ -f "build/duo-$flow.xcresult/Info.plist" ] || { echo "no $flow result"; continue; }
+            mkdir -p "build/duo-$flow-all" "build/iphone-duo/$flow"
+            xcrun xcresulttool export attachments \
+              --path "build/duo-$flow.xcresult" --output-path "build/duo-$flow-all"
+            python3 scripts/rename-screenshots.py "build/duo-$flow-all" \
+              || echo "rename failed: keeping the exported file names"
+            cp "build/duo-$flow-all"/[0-9][0-9]-*.png "build/iphone-duo/$flow/" || true
+            python3 scripts/check-screenshot-sizes.py "build/iphone-duo/$flow" \
+              1398x2034 2034x1398 2007x2853 2853x2007 \
+              | tee -a build/iphone-duo/probe.txt \
+              || echo "WARNING iphone-duo/$flow: not App Store Duo sizes yet"
+          done
+          cd build && zip -qr iphone-duo.zip iphone-duo
+
+    artifacts:
+      - build/iphone-duo.zip
+      - build/iphone-duo/probe.txt
