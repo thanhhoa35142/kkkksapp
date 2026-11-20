@@ -1,8 +1,9 @@
 name: appstore-screenshots
 
-# App Store screenshot sets that ci.yml does not make:
+# App Store screenshot sets, refreshable without a PR to main:
 #   iphone-6.3   the required iPhone class (Dynamic Island, medium display):
 #                1206 × 2622 from an iPhone Pro simulator.
+#   ipad-13      iPad 13-inch, landscape 2752 × 2064 (also made by ci.yml).
 #   iphone-duo   iPhone Duo (foldable): outer 1398 × 2034, inner 2007 × 2853.
 #                Needs Xcode 27.1+ (the first SDK with the Duo simulator).
 # Runs on demand and on pushes to feat/appstore-screenshots*, so the sets can
@@ -74,6 +75,62 @@ jobs:
         with:
           name: iphone-6.3-screenshots
           path: build/iphone-6.3/*.png
+          if-no-files-found: warn
+          retention-days: 14
+
+  # Same as ci.yml's iPad step (13-inch, landscape 2752 × 2064), here so the
+  # set can be refreshed without a PR to main.
+  ipad-13:
+    name: ipad 13"
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+          xcodebuild -version
+
+      - name: Screenshots
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 scripts/pick-simulator.py iPad "Pro 13-inch")
+          echo "Simulator: $UDID"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl status_bar "$UDID" override --time 9:41 \
+            --dataNetwork wifi --wifiMode active --wifiBars 3 \
+            --batteryState charged --batteryLevel 100
+          xcodebuild \
+            -project MyApp.xcodeproj -scheme MyApp \
+            -destination "id=$UDID" -configuration Debug \
+            -resultBundlePath build/ipad.xcresult \
+            -only-testing:MyAppUITests/PadScreenshotTests \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            test
+
+      - name: Export screenshots
+        if: ${{ !cancelled() && hashFiles('build/ipad.xcresult/Info.plist') != '' }}
+        run: |
+          mkdir -p build/ipad-all build/ipad-13
+          xcrun xcresulttool export attachments \
+            --path build/ipad.xcresult --output-path build/ipad-all
+          python3 scripts/rename-screenshots.py build/ipad-all \
+            || echo "rename failed: keeping the exported file names"
+          cp build/ipad-all/[0-9][0-9]-*.png build/ipad-13/ || true
+          # Landscape screens come back in the portrait buffer: turn them back.
+          for f in build/ipad-13/*.png; do
+            h=$(sips -g pixelHeight "$f" | awk '/pixelHeight/ {print $2}')
+            w=$(sips -g pixelWidth "$f" | awk '/pixelWidth/ {print $2}')
+            if [ "$h" -gt "$w" ]; then sips -r 270 "$f" >/dev/null; fi
+          done
+          python3 scripts/check-screenshot-sizes.py build/ipad-13 2752x2064
+
+      - name: Upload screenshots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ipad-13-screenshots
+          path: build/ipad-13/*.png
           if-no-files-found: warn
           retention-days: 14
 

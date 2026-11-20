@@ -91,10 +91,12 @@ final class PadScreenshotTests: XCTestCase {
         let top = waitForResults(app, "detail")
         if top.exists {
             top.tap()
-            if !id(app, "weather.strip").waitForExistence(timeout: 10) {
+            // The inspector's own controls: `weather.strip` is also in the
+            // sidebar, so waiting on it captured before the inspector loaded.
+            if !id(app, "spotAction.directions").waitForExistence(timeout: 10) {
                 XCTFail("[detail] spot detail did not open in the inspector")
             }
-            settle(2)
+            settle(2.5)
         }
         capture(name)
         app.terminate()

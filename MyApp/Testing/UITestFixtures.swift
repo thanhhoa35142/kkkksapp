@@ -109,6 +109,20 @@ enum UITestFixtures {
              lon: 4.8450, lat: 52.3300, distanceM: 6800, base: 58, cap: "rain"),
         Spot(id: UUID(uuidString: "00000000-0000-4000-8000-000000000004")!, kind: "beach",
              name: "Blijburg", lon: 5.0010, lat: 52.3590, distanceM: 9100, base: 41, cap: nil),
+        // Map-only fill (below the list limits): enough pins around the
+        // centre that the map reads as a city of spots in screenshots.
+        Spot(id: UUID(uuidString: "00000000-0000-4000-8000-000000000005")!, kind: "park",
+             name: "Westerpark", lon: 4.8760, lat: 52.3866, distanceM: 2100, base: 70, cap: nil),
+        Spot(id: UUID(uuidString: "00000000-0000-4000-8000-000000000006")!, kind: "park",
+             name: "Oosterpark", lon: 4.9200, lat: 52.3600, distanceM: 2400, base: 66, cap: nil),
+        Spot(id: UUID(uuidString: "00000000-0000-4000-8000-000000000007")!, kind: "park",
+             name: "Sarphatipark", lon: 4.8960, lat: 52.3540, distanceM: 1900, base: 62, cap: nil),
+        Spot(id: UUID(uuidString: "00000000-0000-4000-8000-000000000008")!, kind: "park",
+             name: "Rembrandtpark", lon: 4.8460, lat: 52.3660, distanceM: 3100, base: 55, cap: nil),
+        Spot(id: UUID(uuidString: "00000000-0000-4000-8000-000000000009")!, kind: "park",
+             name: "Beatrixpark", lon: 4.8810, lat: 52.3420, distanceM: 3200, base: 50, cap: nil),
+        Spot(id: UUID(uuidString: "00000000-0000-4000-8000-00000000000a")!, kind: "park",
+             name: "Flevopark", lon: 4.9480, lat: 52.3610, distanceM: 4100, base: 45, cap: nil),
     ]
 
     static func spot(_ id: UUID) -> Spot? { spots.first { $0.id == id } }
@@ -124,6 +138,26 @@ enum UITestFixtures {
         let wobble = Double((day * 7) % 11) - 5             // per-day variation
         let value = Double(spot.base) - 18 + curve * 22 + wobble
         return (max(5, min(98, Int(value.rounded()))), spot.cap)
+    }
+
+    /// One weather curve for every endpoint, so the sidebar's "Weather in",
+    /// the decision card's reasons and the spot detail agree in screenshots:
+    /// coolest at 03:00, warmest at 15:00 (fixture-local).
+    static func tempC(at date: Date) -> Double {
+        let hour = Double(localCalendar.component(.hour, from: date))
+        let value = 17 + 7 * cos((hour - 15) / 24 * 2 * .pi)
+        return (value * 10).rounded() / 10
+    }
+
+    /// Dry by day, a rain spell late in the evening (21:00–23:59).
+    static func precipProb(at date: Date) -> Int {
+        (21..<24).contains(localCalendar.component(.hour, from: date)) ? 60 : 5
+    }
+
+    private static var localCalendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        return calendar
     }
 
     // MARK: Favorites
@@ -216,13 +250,17 @@ enum UITestFixtures {
     private static func scoreJSON(_ spot: Spot, at date: Date) -> [String: Any] {
         let s = score(spot, at: date)
         return ["score": s.score, "confidence": 2, "capReason": nullable(s.cap),
-                "reasons": reasons(s.cap), "computedAt": iso(.now)]
+                "reasons": reasons(s.cap, at: date), "computedAt": iso(.now)]
     }
 
-    private static func reasons(_ cap: String?) -> [[String: Any]] {
-        var list: [[String: Any]] = [["code": "weather.clear", "params": ["temp": 21]],
-                                     ["code": "crowd.low", "params": [String: Any]()],
+    /// The weather reason follows the hour's weather (`tempC`); a rain-capped
+    /// spot says rain instead of "Clear skies".
+    private static func reasons(_ cap: String?, at date: Date) -> [[String: Any]] {
+        var list: [[String: Any]] = [["code": "crowd.low", "params": [String: Any]()],
                                      ["code": "amenity.well_equipped", "params": [String: Any]()]]
+        if cap != "rain" {
+            list.insert(["code": "weather.clear", "params": ["temp": Int(tempC(at: date).rounded())]], at: 0)
+        }
         if let cap { list.insert(["code": "cap.\(cap)", "params": [String: Any]()], at: 0) }
         return list
     }
@@ -268,8 +306,9 @@ enum UITestFixtures {
         let s = score(spot, at: date)
         return ["tsHour": iso(date), "score": s.score,
                 "components": ["weather": min(100, s.score + 4), "crowd": 70, "amenity": 55, "fresh": 80],
-                "capReason": nullable(s.cap), "reasons": reasons(s.cap), "confidence": 2,
-                "weather": ["tempC": 21.0, "feelsLikeC": 20.0, "precipProb": s.cap == "rain" ? 80 : 10,
+                "capReason": nullable(s.cap), "reasons": reasons(s.cap, at: date), "confidence": 2,
+                "weather": ["tempC": tempC(at: date), "feelsLikeC": tempC(at: date) - 1,
+                            "precipProb": s.cap == "rain" ? 80 : precipProb(at: date),
                             "windKmh": 12.0, "uv": 4.0, "cloud": 30]] as JSON
     }
 
@@ -320,17 +359,19 @@ enum UITestFixtures {
         return city
     }
 
-    /// `/v1/weather/nearby`: a mild day with a rain spell and one hour with
+    /// `/v1/weather/nearby`: the same day as the spots (`tempC`,
+    /// `precipProb`: dry by day, a late-evening rain spell) and one hour with
     /// only a temperature (every field but `ts` is optional).
     private static func nearbyWeatherPoint(at date: Date, index: Int) -> [String: Any] {
-        let temp = 16.0 + 6.0 * sin(Double(index) / 24 * 2 * .pi)
-        var point: [String: Any] = ["ts": iso(date), "tempC": (temp * 10).rounded() / 10]
+        let temp = tempC(at: date)
+        var point: [String: Any] = ["ts": iso(date), "tempC": temp]
         if index == 5 { return point }
-        point["feelsLikeC"] = ((temp - 1.5) * 10).rounded() / 10
-        point["precipProb"] = (6..<10).contains(index) ? 70 : (index % 4 == 0 ? 25 : 5)
+        let rain = precipProb(at: date)
+        point["feelsLikeC"] = ((temp - 1) * 10).rounded() / 10
+        point["precipProb"] = rain
         point["windKmh"] = 12.0
         point["uv"] = 3.0
-        point["cloud"] = (6..<10).contains(index) ? 90 : 35
+        point["cloud"] = rain > 20 ? 90 : 20
         return point
     }
 
