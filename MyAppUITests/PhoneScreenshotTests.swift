@@ -80,8 +80,20 @@ final class PhoneScreenshotTests: XCTestCase {
         app.descendants(matching: .any).matching(identifier: identifier).firstMatch
     }
 
+    /// iPhone Duo folded draws the tabs as a side rail outside `tabBars`,
+    /// so fall back to any button, then any element, with the tab's label.
     private func openTab(_ app: XCUIApplication, _ label: String) {
-        tap(app.tabBars.buttons[label], "\(label) tab", in: app)
+        let barButton = app.tabBars.buttons[label]
+        if barButton.waitForExistence(timeout: 3) {
+            tap(barButton, "\(label) tab", in: app)
+            return
+        }
+        let byLabel = NSPredicate(format: "label == %@", label)
+        let anyButton = app.buttons.matching(byLabel).firstMatch
+        let target = anyButton.exists
+            ? anyButton
+            : app.descendants(matching: .any).matching(byLabel).firstMatch
+        tap(target, "\(label) tab", in: app)
     }
 
     /// Spot Detail of the first "More nearby" row (the decision card opens
