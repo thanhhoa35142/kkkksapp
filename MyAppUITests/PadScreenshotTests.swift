@@ -79,6 +79,9 @@ final class PadScreenshotTests: XCTestCase {
     func test01ExploreLight() {
         let app = launch()
         waitForResults(app, "explore")
+        // First test of the run: the simulator's map tile cache is empty and
+        // the tiles arrive well after the spots (shots showed a blank grid).
+        settle(8)
         capture("01-explore-light")
         app.terminate()
     }
