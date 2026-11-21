@@ -7,12 +7,10 @@
 # signing. Started by hand from the Codemagic UI, so it only spends the
 # 500 free M2 minutes a month when asked.
 #
-# First pass: Apple documents no command-line fold/unfold control, so the
-# probe step prints what the image offers (device types, simctl commands
-# mentioning fold/posture) and the size of the screen the simulator boots
-# with. Both flows (iPhone tab bar, iPad split view) are captured; which
-# one fits each display is what this run finds out.
-#   outer display 1398 × 2034, inner display 2007 × 2853 (or landscape)
+# simctl has no fold/unfold command (probe, 2026-11-20), so only the
+# folded outer display is captured: 1398 × 2034, with the iPhone flow.
+# The inner display (2007 × 2853) is not covered. The run takes the six
+# App Store shots in English, Dutch, German and Spanish.
 
 workflows:
   iphone-duo-screenshots:
@@ -78,45 +76,48 @@ workflows:
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             build-for-testing
 
-      - name: iPhone flow
+      # The App Store set only (6 tests, not the whole phone suite), once per
+      # language. The first run (2026-11-20) showed the folded outer screen
+      # uses the iPhone flow; the iPad flow and the fold probe are dropped
+      # (simctl has no fold command).
+      - name: App Store set in en, nl, de, es
         ignore_failure: true
         script: |
-          xcodebuild \
-            -project MyApp.xcodeproj -scheme MyApp \
-            -destination "id=$DUO_UDID" -configuration Debug \
-            -derivedDataPath build/dd \
-            -resultBundlePath build/duo-phone.xcresult \
-            -only-testing:MyAppUITests/PhoneScreenshotTests \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
-            test-without-building
+          for lang in en nl de es; do
+            TEST_RUNNER_SCREENSHOT_LANG=$lang xcodebuild \
+              -project MyApp.xcodeproj -scheme MyApp \
+              -destination "id=$DUO_UDID" -configuration Debug \
+              -derivedDataPath build/dd \
+              -resultBundlePath "build/duo-$lang.xcresult" \
+              -only-testing:MyAppUITests/PhoneScreenshotTests/test02BestNow \
+              -only-testing:MyAppUITests/PhoneScreenshotTests/test12SpotDetail \
+              -only-testing:MyAppUITests/PhoneScreenshotTests/test23MarketingWeek \
+              -only-testing:MyAppUITests/PhoneScreenshotTests/test24MarketingWhy \
+              -only-testing:MyAppUITests/PhoneScreenshotTests/test09Getaways \
+              -only-testing:MyAppUITests/PhoneScreenshotTests/test25WebsiteDark \
+              CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+              test-without-building || echo "WARNING: some $lang tests failed"
+          done
 
-      - name: iPad flow
-        ignore_failure: true
-        script: |
-          xcodebuild \
-            -project MyApp.xcodeproj -scheme MyApp \
-            -destination "id=$DUO_UDID" -configuration Debug \
-            -derivedDataPath build/dd \
-            -resultBundlePath build/duo-pad.xcresult \
-            -only-testing:MyAppUITests/PadScreenshotTests \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
-            test-without-building
-
-      # Reports sizes; does not fail until the real ones are known.
+      # build/iphone-duo/<lang>/01-best-now.png … 06-dark-spot.png, the names
+      # used in design/appstore-screenshots/iphone-duo.
       - name: Export screenshots
         script: |
-          for flow in phone pad; do
-            [ -f "build/duo-$flow.xcresult/Info.plist" ] || { echo "no $flow result"; continue; }
-            mkdir -p "build/duo-$flow-all" "build/iphone-duo/$flow"
+          for lang in en nl de es; do
+            [ -f "build/duo-$lang.xcresult/Info.plist" ] || { echo "no $lang result"; continue; }
+            all="build/duo-$lang-all"; out="build/iphone-duo/$lang"
+            mkdir -p "$all" "$out"
             xcrun xcresulttool export attachments \
-              --path "build/duo-$flow.xcresult" --output-path "build/duo-$flow-all"
-            python3 scripts/rename-screenshots.py "build/duo-$flow-all" \
+              --path "build/duo-$lang.xcresult" --output-path "$all"
+            python3 scripts/rename-screenshots.py "$all" \
               || echo "rename failed: keeping the exported file names"
-            cp "build/duo-$flow-all"/[0-9][0-9]-*.png "build/iphone-duo/$flow/" || true
-            python3 scripts/check-screenshot-sizes.py "build/iphone-duo/$flow" \
-              1398x2034 2034x1398 2007x2853 2853x2007 \
-              | tee -a build/iphone-duo/probe.txt \
-              || echo "WARNING iphone-duo/$flow: not App Store Duo sizes yet"
+            i=1
+            for shot in 05-best-now 21-spot-detail 42-marketing-week 43-marketing-why 17-getaways 52-dark-spot; do
+              [ -f "$all/$shot.png" ] && cp "$all/$shot.png" "$out/0$i-${shot#*-}.png"
+              i=$((i + 1))
+            done
+            python3 scripts/check-screenshot-sizes.py "$out" 1398x2034 2007x2853 \
+              | tee -a build/iphone-duo/probe.txt || echo "WARNING iphone-duo/$lang: sizes"
           done
           cd build && zip -qr iphone-duo.zip iphone-duo
 
