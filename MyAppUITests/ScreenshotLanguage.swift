@@ -18,9 +18,10 @@ enum ScreenshotLanguage {
         ScreenshotStrings.table[english]?[language] ?? english
     }
 
-    /// The "Why 83?" link and sheet title start with this.
-    static func whyPrefix(in language: String) -> String {
-        let format = text("Why %lld?", in: language)
+    /// The fixed text before the first placeholder of a format key, e.g.
+    /// "Warum" for "Why %lld?" in German: labels like "Why 83?" start with it.
+    static func prefix(of formatKey: String, in language: String) -> String {
+        let format = text(formatKey, in: language)
         return String(format[..<(format.range(of: "%")?.lowerBound ?? format.endIndex)])
             .trimmingCharacters(in: .whitespaces)
     }

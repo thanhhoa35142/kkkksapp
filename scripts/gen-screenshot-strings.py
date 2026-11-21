@@ -14,7 +14,7 @@ LANGS = ("nl", "de", "es")
 KEYS = [
     "Choose a City", "Choose a City…", "Choose a Time…", "Continue",
     "Delete My Data", "Filters", "Is this spot still here?", "Map",
-    "Next 7 days", "Next good time", "Saved", "See more picks with Plus", "Settings",
+    "Next 7 days", "Next good time", "Saved", "See more picks with Plus", "Settings", "Time: %@",
     "Where's Nice This Weekend?", "Why %lld?",
 ]
 # Drawn by UIKit (the iPad tab bar's overflow button), not in the catalog.

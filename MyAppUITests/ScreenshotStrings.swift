@@ -17,6 +17,7 @@ enum ScreenshotStrings {
         "Saved": ["de": "Gesichert", "es": "Guardados", "nl": "Bewaard"],
         "See more picks with Plus": ["de": "Mehr Tipps mit Plus", "es": "Más sitios con Plus", "nl": "Meer tips met Plus"],
         "Settings": ["de": "Einstellungen", "es": "Ajustes", "nl": "Instellingen"],
+        "Time: %@": ["de": "Zeit: %@", "es": "Hora: %@", "nl": "Tijd: %@"],
         "Where's Nice This Weekend?": ["de": "Wo ist es dieses Wochenende schön?", "es": "¿Dónde hace bueno este fin de semana?", "nl": "Waar is het mooi dit weekend?"],
         "Why %lld?": ["de": "Warum %lld?", "es": "¿Por qué %lld?", "nl": "Waarom %lld?"],
     ]

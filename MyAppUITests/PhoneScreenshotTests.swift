@@ -221,7 +221,8 @@ final class PhoneScreenshotTests: XCTestCase {
         let app = launch()
         waitForResults(app, "when")
         // The menu's label reads "Time: Now".
-        if tap(button(app, beginningWith: "Time"), "When menu", in: app) {
+        if tap(button(app, beginningWith: ScreenshotLanguage.prefix(of: "Time: %@", in: language)),
+               "When menu", in: app) {
             capture("18-when-menu")
             if tap(button(app, "Choose a Time…"), "Choose a Time…", in: app) {
                 capture("19-time-picker")
@@ -257,7 +258,8 @@ final class PhoneScreenshotTests: XCTestCase {
     func test13ScoreBreakdown() {
         let app = launch()
         openSpotDetail(app)
-        if tap(button(app, beginningWith: "Why"), "Why NN?", in: app) {
+        if tap(button(app, beginningWith: ScreenshotLanguage.prefix(of: "Why %lld?", in: language)),
+               "Why NN?", in: app) {
             capture("24-score-breakdown")
         }
         app.terminate()
@@ -328,7 +330,7 @@ final class PhoneScreenshotTests: XCTestCase {
     private func marketingWhy(dark: Bool, name: String) {
         let app = launch(dark: dark)
         openSpotDetail(app)
-        let why = ScreenshotLanguage.whyPrefix(in: language)
+        let why = ScreenshotLanguage.prefix(of: "Why %lld?", in: language)
         guard tap(button(app, beginningWith: why), "Why NN?", in: app) else { return }
         let sheetTitle = app.navigationBars.staticTexts.matching(
             NSPredicate(format: "label BEGINSWITH %@", why)).firstMatch
